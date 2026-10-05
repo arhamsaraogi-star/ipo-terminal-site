@@ -1,7 +1,7 @@
 import { useVault, go } from '../App'
-import { Card, Kpi, Pill, Stage, Table } from '../components/ui'
-import { allLockins, byId, eventDate, ipo, issueSize, priceBand, upcomingEvents } from '../lib/derive'
-import { crore, daysUntil, fmtDate, fmtDateTime, pct, urgency } from '../lib/format'
+import { Card, Delta, Kpi, Pill, Stage, Table } from '../components/ui'
+import { allLockins, byId, cmp, eventDate, ipo, issuePrice, issueSize, listedOn, listingGainPct, priceBand, returnVsIssuePct, upcomingEvents } from '../lib/derive'
+import { crore, daysUntil, fmtDate, fmtDateTime, inr, pct, urgency } from '../lib/format'
 import { HoldingsTable } from './Portfolio'
 import { brlms, dealSize, filedOn } from './AnchorDesk'
 import type { CompanyRecord } from '../lib/types'
@@ -10,9 +10,11 @@ export default function Dashboard() {
   const v = useVault()
   const live = v.companies.filter(r => ['ISSUE_OPEN', 'ISSUE_ANNOUNCED'].includes(r.company.lifecycle))
   const opens14 = upcomingEvents(v, 14, ['ISSUE_OPEN', 'LISTING', 'ANCHOR_BIDDING', 'BASIS_OF_ALLOTMENT'])
-  const listed90 = v.companies.filter(r => { const d = eventDate(r, 'LISTING'); return d && daysUntil(d) <= 0 && daysUntil(d) >= -90 })
+  const listed90 = v.companies.filter(r => { const d = listedOn(r); return d && daysUntil(d) <= 0 && daysUntil(d) >= -90 })
   const unlocks = allLockins(v).filter(x => x.d >= 0 && x.d <= 30)
   const unlockPct = unlocks.reduce((s, x) => s + (Number(x.l.pct_post_issue?.value) || 0), 0)
+  const gains = listed90.map(listingGainPct).filter((g): g is number => g != null)
+  const avgGain = gains.length ? gains.reduce((a, b) => a + b, 0) / gains.length : null
   const pipeline = v.companies.filter(r => ['DRHP_FILED', 'SEBI_OBSERVED', 'RHP_FILED'].includes(r.company.lifecycle))
   const heldNews = v.companies.filter(r => v.portfolio.holdings.some(h => h.company_id === r.company.company_id))
     .flatMap(r => r.news.map(n => ({ n, r }))).sort((a, b) => b.n.published_at.localeCompare(a.n.published_at)).slice(0, 5)
@@ -28,14 +30,15 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         <Kpi label="Live & announced issues" value={live.length} sub={`${opens14.filter(x => x.e.event_type === 'ISSUE_OPEN').length} opening in 14 days`} />
-        <Kpi label="In SEBI pipeline" value={pipeline.length} sub="DRHP / observed / RHP" />
-        <Kpi label="Listed · last 90 days" value={listed90.length} sub="Mainboard + SME" />
+        <Kpi label="Live DRHP pipeline" value={pipeline.length} sub="filed / approved / RHP" />
+        <Kpi label="Listed · last 90 days" value={listed90.length} sub={avgGain != null ? <>avg listing gain <Delta v={avgGain} /></> : 'Mainboard + SME'} />
         <Kpi label="Unlocks · next 30 days" value={unlocks.length} tone={unlocks.some(x => x.d < 7) ? 'neg' : ''}
-          sub={unlocks.length ? `${pct(unlockPct)} of post-issue equity, combined` : 'None'} />
+          sub={unlocks.length ? (unlockPct > 0 ? `${pct(unlockPct)} of shares outstanding, combined` : `${new Set(unlocks.map(x => x.r.company.company_id)).size} companies`) : 'None'} />
       </div>
 
       <NewFilings />
       <OpenNow />
+      <RecentListings />
 
       <Card title="My IPO investments" action={<a className="btn" href="#/portfolio">Open portfolio →</a>}>
         <HoldingsTable />
@@ -151,6 +154,24 @@ function NewFilings() {
         { key: 'c', label: 'Company', render: r => <div><b>{r.company.name}</b><div className="muted text-xs">{r.company.segment === 'SME' ? 'SME' : 'Mainboard'}</div></div> },
         { key: 's', label: 'Size', right: true, render: r => dealSize(r).text },
         { key: 'b', label: 'Lead managers', render: r => brlms(r).map(b => b.name.replace(/ (Private )?Limited$/i, '')).join(', ') || <span className="muted">reading cover…</span> },
+      ]} />
+    </Card>
+  )
+}
+
+function RecentListings() {
+  const v = useVault()
+  const rows = v.companies.filter(r => { const d = listedOn(r); return d && daysUntil(d) <= 0 && daysUntil(d) >= -30 })
+    .sort((a, b) => (listedOn(b) ?? '').localeCompare(listedOn(a) ?? '')).slice(0, 8)
+  if (!rows.length) return null
+  return (
+    <Card title="Latest listings" action={<a className="btn" href="#/listed">All listings →</a>} solid>
+      <Table rows={rows} onRow={r => go(`/company/${r.company.company_id}`)} cols={[
+        { key: 'c', label: 'Company', render: r => <div><b>{r.company.name}</b><div className="muted text-xs">{r.company.segment === 'SME' ? 'SME' : 'Mainboard'} · {fmtDate(listedOn(r), false)}</div></div> },
+        { key: 'ip', label: 'Issue', right: true, render: r => inr(issuePrice(r)) },
+        { key: 'lg', label: 'Listing gain', right: true, render: r => <Delta v={listingGainPct(r)} /> },
+        { key: 'p', label: 'Price', right: true, render: r => inr(cmp(r), 2) },
+        { key: 'ret', label: 'vs issue', right: true, render: r => <Delta v={returnVsIssuePct(r)} /> },
       ]} />
     </Card>
   )

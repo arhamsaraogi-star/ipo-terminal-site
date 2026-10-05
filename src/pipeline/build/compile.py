@@ -21,9 +21,42 @@ from pipeline.validation.checks import Report, validate_bundle
 SCHEMA_VERSION = 1
 
 
-def derive(b: CompanyBundle) -> CompanyBundle:
+MARKET_URL = "https://nsearchives.nseindia.com/archives/equities/bhavcopy/pr/"
+
+
+def market_block(b: CompanyBundle, data: Path) -> dict | None:
+    sym = b.company.get("identifiers", {}).get("nse_symbol")
+    if not sym:
+        return None
+    q = _MKT["quotes"].get(sym)
+    lst = _MKT["listing"].get(sym)
+    hist = read_json(data / "market" / "history" / f"{sym}.json", [])
+    if not (q or lst or hist):
+        return None
+    if len(hist) > 260:  # keep the chart light: weekly points beyond the last 120 sessions
+        hist = hist[:-120][::5] + hist[-120:]
+    return {"symbol": sym, "quote": q, "listing": lst, "history": hist,
+            "source": "NSE end-of-day archives (bhavcopy / market-cap file); delayed"}
+
+
+def derive(b: CompanyBundle, data: Path = DATA) -> CompanyBundle:
+    # shares outstanding from the exchange (post-issue share count proxy for listed companies)
+    sym = b.company.get("identifiers", {}).get("nse_symbol")
+    q = _MKT["quotes"].get(sym) if sym else None
+    if q and q.get("shares") and b.offerings:
+        o = b.offerings[0]
+        o["facts"]["shares_outstanding"] = {
+            "fact_id": f"{o['offering_id']}:shares_outstanding", "metric": "shares_outstanding", "label": "Shares outstanding (NSE)",
+            "value": q["shares"], "unit": "shares", "period": f"as_of:{q['date']}", "basis": "exchange", "kind": "reported",
+            "formula": None, "inputs": [], "source": {"source_type": "EXCHANGE_ISSUE_PAGE", "document_id": None, "page": None,
+            "table": "NSE market capitalisation file", "section": None, "url": MARKET_URL, "sha256": None, "tier": "primary"},
+            "extraction": {"method": "exchange:mcap_file", "extracted_at": now_ist(), "extractor_version": None, "confidence": "high"},
+            "status": "ok", "note": None, "supersedes": None}
     b.lockins = lk.compute(b)
     return b
+
+
+_MKT: dict = {"quotes": {}, "listing": {}}
 
 
 def derived_events(b: CompanyBundle) -> list[dict]:
@@ -50,8 +83,10 @@ def derived_events(b: CompanyBundle) -> list[dict]:
 def build_payload(data: Path = DATA, write_derived: bool = True) -> tuple[dict, Report]:
     report = Report()
     companies = []
+    _MKT["quotes"] = read_json(data / "market" / "quotes.json", {})
+    _MKT["listing"] = read_json(data / "market" / "listing.json", {})
     for d in company_dirs(data):
-        b = derive(load_company(d))
+        b = derive(load_company(d), data)
         r = validate_bundle(b)
         report.extend(r)
         if write_derived and r.ok:
@@ -60,6 +95,7 @@ def build_payload(data: Path = DATA, write_derived: bool = True) -> tuple[dict, 
             "company": b.company, "offerings": b.offerings, "facts": b.facts, "documents": b.documents,
             "events": sorted(b.events + derived_events(b), key=lambda e: e["date"]),
             "lockins": b.lockins, "news": sorted(b.news, key=lambda n: n["published_at"], reverse=True),
+            "market": market_block(b, data),
         })
 
     portfolio = read_json(data / "portfolio" / "holdings.json", {"holdings": [], "watchlist": []})
@@ -82,6 +118,7 @@ def build_payload(data: Path = DATA, write_derived: bool = True) -> tuple[dict, 
         "companies": companies,
         "changes": changes[:1000],
         "portfolio": portfolio,
+        "redirects": read_json(data / "index" / "redirects.json", {}),
         "review": report.warnings,
     }
     return payload, report

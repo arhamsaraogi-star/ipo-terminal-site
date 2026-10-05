@@ -41,7 +41,12 @@ export default function App() {
   const [updated, setUpdated] = useState<string | null>(null)
   const [pf, setPfState] = useState<Pf>(loadPf)
   const setPf = (p: Pf) => { setPfState(p); savePf(p) }
-  const view = useMemo(() => vault ? { ...vault, portfolio: pf } : null, [vault, pf])
+  const view = useMemo(() => {
+    if (!vault) return null
+    const rd = vault.redirects ?? {}
+    const fix = (id: string) => rd[id] ?? id
+    return { ...vault, portfolio: { holdings: pf.holdings.map(h => ({ ...h, company_id: fix(h.company_id) })), watchlist: [...new Set(pf.watchlist.map(fix))] } }
+  }, [vault, pf])
 
   // Live refresh: whenever a newer build is published, fetch + decrypt it in place (no reload, no re-login).
   useEffect(() => {
@@ -207,7 +212,12 @@ function Shell({ onLock, updated }: { onLock: () => void; updated: string | null
             <span className="ink2">Companies marked “Demo” are fictional fixtures for testing the terminal. They disappear once live ingestion is switched on.</span>
           </div>
         )}
-        <main key={route}>{page}</main>
+        <main key={route} className="page">{page}</main>
+        <nav className="bottom-nav glass glass-strong" aria-label="Primary">
+          {[['/', '◉', 'Home'], ['/anchor', '⚓', 'Anchor'], ['/pipeline', '▤', 'Pipeline'], ['/listed', '◆', 'Listed'], ['/portfolio', '★', 'Portfolio']].map(([p, i, l]) => (
+            <a key={p} href={`#${p}`} aria-current={active === p ? 'page' : undefined}><span className="ico">{i}</span>{l}</a>
+          ))}
+        </nav>
       </div>
     </div>
   )
@@ -218,8 +228,9 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(false)
   const fuse = useMemo(() => new Fuse<CompanyRecord>(v.companies, {
-    threshold: 0.35, keys: ['company.name', 'company.legal_name', 'company.aliases', 'company.identifiers.nse_symbol',
-      'company.identifiers.bse_code', 'company.identifiers.cin', 'company.sector', 'company.industry'],
+    threshold: 0.33, ignoreLocation: true, keys: ['company.name', 'company.legal_name', 'company.aliases', 'company.identifiers.nse_symbol',
+      'company.identifiers.bse_code', 'company.identifiers.cin', 'company.identifiers.isin', 'company.sector', 'company.industry', 'company.promoters',
+      'offerings.intermediaries.brlms'],
   }), [v])
   const hits = q ? fuse.search(q, { limit: 8 }) : []
   useEffect(() => {
@@ -234,6 +245,11 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
           value={q} onChange={e => { setQ(e.target.value); setOpen(true) }} onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           onKeyDown={e => { if (e.key === 'Enter' && hits[0]) { go(`/company/${hits[0].item.company.company_id}`); setQ('') } }} />
+        {open && q.trim().length > 1 && hits.length === 0 && (
+          <div className="glass glass-strong absolute left-0 right-0 top-13 p-4 z-50 text-sm ink2">
+            No IPO, DRHP or recent listing matches “{q}”. The terminal covers DRHPs filed in the last ~15 months and issues/listings in the last 12 months (NSE + SEBI; BSE-only SME issues are not covered yet).
+          </div>
+        )}
         {open && hits.length > 0 && (
           <div className="glass glass-strong absolute left-0 right-0 top-13 p-2 z-50">
             {hits.map(h => (

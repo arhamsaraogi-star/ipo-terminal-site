@@ -1,153 +1,420 @@
-import { useState } from 'react'
-import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { useMemo, useState } from 'react'
+import { Area, AreaChart, Bar, CartesianGrid, ComposedChart, Legend, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { usePf, useVault } from '../App'
-import { Card, FactValue, Kpi, Pill, SourceLine, Stage, Table } from '../components/ui'
-import { byId, finTable, ipo, isHeld, isWatched, issuePrice, issueSize, latest, nextLockin, priceBand, valuationInputs } from '../lib/derive'
-import { cagr, crore, daysUntil, fmtDate, fmtDateTime, fv, fyYear, humanize, pct, urgency } from '../lib/format'
-import type { CompanyRecord, Fact } from '../lib/types'
+import { Card, Delta, FactValue, Pill, Seg, SourceLine, Stage, Table } from '../components/ui'
+import {
+  byId, cmp, dayChangePct, finTable, holdingMarks, ipo, isHeld, isStub, isWatched, issuePrice, issueSize, latest,
+  listedOn, listingGainPct, listingOpen, mcapAtIssue, mcapNow, nextEvent, priceBand, quote, returnVsIssuePct, valuationInputs,
+} from '../lib/derive'
+import { crore, daysUntil, fmtDate, fmtDateTime, fv, humanize, inr, num, pct, shares, urgency } from '../lib/format'
+import type { CompanyRecord, Fact, Holding } from '../lib/types'
 import { holder } from './Dashboard'
+import { brlms, dealSize, filedOn } from './AnchorDesk'
 
-const TABS = ['Overview', 'IPO', 'Financials', 'Industry', 'Valuation', 'Timeline', 'Lock-ins', 'Documents', 'News', 'Changes'] as const
+const TABS = ['Overview', 'Financials', 'Valuation', 'Industry', 'IPO', 'Timeline', 'Lock-ins', 'Documents', 'News'] as const
 type Tab = typeof TABS[number]
 
 export default function CompanyPage({ id }: { id: string }) {
   const v = useVault()
   const { pf, setPf } = usePf()
-  const r = byId(v, id)
   const [tab, setTab] = useState<Tab>('Overview')
+  const [form, setForm] = useState(false)
+  const r = byId(v, v.redirects?.[id] ?? id)
   if (!r) return <div className="glass p-10">Company not found. <a href="#/pipeline">Back to pipeline</a></div>
   const c = r.company
-  const held = isHeld(v, id), watched = isWatched(v, id)
-  const [form, setForm] = useState(false)
+  const cid = c.company_id
+  const held = isHeld(v, cid), watched = isWatched(v, cid)
 
   return (
     <div className="space-y-5">
-      <header className="glass glass-strong p-6 fade-in">
+      <header className="glass glass-strong p-5 md:p-6 fade-in">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 mb-2">
               <Stage s={c.lifecycle} />
               <Pill tone={c.segment === 'SME' ? 'amber' : 'slate'}>{c.segment === 'SME' ? 'SME' : c.segment === 'MAINBOARD' ? 'Mainboard' : 'Segment TBC'}</Pill>
-              {c.is_sample && <Pill tone="amber">DEMO</Pill>}
+              {c.drhp_status && <Pill tone="violet">{c.drhp_status}</Pill>}
               {held && <Pill tone="amber">★ In portfolio</Pill>}
             </div>
-            <h1 className="display text-[36px] font-bold leading-tight">{c.name}</h1>
-            <p className="muted mt-1">{[c.sector, c.industry, c.identifiers.nse_symbol && `NSE: ${c.identifiers.nse_symbol}`, c.identifiers.bse_code && `BSE: ${c.identifiers.bse_code}`, c.identifiers.cin && `CIN ${c.identifiers.cin}`].filter(Boolean).join(' · ')}</p>
+            <h1 className="display text-[28px] md:text-[36px] font-bold leading-tight">{c.name}</h1>
+            <p className="muted mt-1 text-sm">{[c.identifiers.nse_symbol && `NSE: ${c.identifiers.nse_symbol}`, c.identifiers.isin, c.identifiers.cin && `CIN ${c.identifiers.cin}`,
+              c.website && <a key="w" href={c.website} target="_blank" rel="noreferrer">{c.website.replace(/^https?:\/\//, '')}</a>].filter(Boolean).map((x, i) => <span key={i}>{i > 0 && ' · '}{x}</span>)}</p>
           </div>
           <div className="flex gap-2 flex-wrap">
             <button className="btn btn-primary" onClick={() => setForm(f => !f)}>{held ? '★ Edit holding' : '★ Add to portfolio'}</button>
-            <button className="btn" onClick={() => setPf({ ...pf, watchlist: watched ? pf.watchlist.filter(x => x !== id) : [...pf.watchlist, id] })}>{watched ? '☆ Unwatch' : '☆ Watch'}</button>
+            <button className="btn" onClick={() => setPf({ ...pf, watchlist: watched ? pf.watchlist.filter(x => x !== cid) : [...pf.watchlist, cid] })}>{watched ? '☆ Unwatch' : '☆ Watch'}</button>
           </div>
         </div>
-        {form && <HoldingForm id={id} onDone={() => setForm(false)} />}
+        <MetricStrip r={r} />
+        {form && <HoldingForm r={r} onDone={() => setForm(false)} />}
         <div className="seg mt-5">{TABS.map(t => <button key={t} aria-pressed={tab === t} onClick={() => setTab(t)}>{t}</button>)}</div>
       </header>
 
       {tab === 'Overview' && <Overview r={r} />}
-      {tab === 'IPO' && <IpoTab r={r} />}
       {tab === 'Financials' && <Financials r={r} />}
-      {tab === 'Industry' && <Industry r={r} />}
       {tab === 'Valuation' && <Valuation r={r} />}
+      {tab === 'Industry' && <Industry r={r} />}
+      {tab === 'IPO' && <IpoTab r={r} />}
       {tab === 'Timeline' && <Timeline r={r} />}
       {tab === 'Lock-ins' && <LockinTab r={r} />}
       {tab === 'Documents' && <Docs r={r} />}
       {tab === 'News' && <NewsTab r={r} />}
-      {tab === 'Changes' && <ChangesTab r={r} />}
     </div>
   )
 }
 
+// ───────── header metrics ─────────
+function M({ label, children, sub }: { label: string; children: React.ReactNode; sub?: React.ReactNode }) {
+  return <div className="min-w-0"><div className="eyebrow">{label}</div><div className="display text-[22px] md:text-[26px] font-semibold leading-tight mt-0.5">{children}</div>{sub && <div className="muted text-xs mt-0.5">{sub}</div>}</div>
+}
+function MetricStrip({ r }: { r: CompanyRecord }) {
+  const et = useVault().event_types
+  const q = quote(r), listed = listedOn(r)
+  const sub = ipo(r)?.subscription?.total_times
+  if (q || listed) {
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mt-5">
+        <M label={`Price${q ? ` · ${fmtDate(q.date, false)}` : ''}`} sub={<Delta v={dayChangePct(r)} />}>{inr(cmp(r), 2)}</M>
+        <M label="vs issue price" sub={`Issue ${inr(issuePrice(r))}`}><Delta v={returnVsIssuePct(r)} /></M>
+        <M label="Listing gain" sub={listingOpen(r) ? `Opened ${inr(listingOpen(r), 2)}` : undefined}><Delta v={listingGainPct(r)} /></M>
+        <M label="Market cap" sub={mcapAtIssue(r) ? `${crore(mcapAtIssue(r))} at issue` : undefined}>{crore(mcapNow(r))}</M>
+        <M label="Issue size" sub={sub != null ? `Subscribed ${sub.toFixed(1)}x` : undefined}>{crore(issueSize(r))}</M>
+        <M label="Listed" sub={listed ? `${-daysUntil(listed)} days ago` : undefined}>{fmtDate(listed)}</M>
+      </div>
+    )
+  }
+  const ds = dealSize(r)
+  const ne = nextEvent(r)
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-5">
+      <M label="Filed" sub={filedOn(r) ? `${-daysUntil(filedOn(r)!)} days ago` : undefined}>{fmtDate(filedOn(r))}</M>
+      <M label="Size (as filed)">{ds.text}</M>
+      <M label="Price band">{priceBand(r)}</M>
+      <M label="Next milestone" sub={ne ? fmtDate(ne.date) : undefined}>{ne ? <span className="text-[17px]">{et[ne.event_type]?.label ?? humanize(ne.event_type)}</span> : '—'}</M>
+      <M label="Lead managers"><span className="text-[15px] font-medium">{brlms(r).map(b => b.name.replace(/ (Private )?Limited$/i, '')).join(', ') || '—'}</span></M>
+    </div>
+  )
+}
+
+// ───────── price chart ─────────
+function PriceChart({ r }: { r: CompanyRecord }) {
+  const [range, setRange] = useState<'1M' | '3M' | '6M' | 'ALL'>('ALL')
+  const hist = r.market?.history ?? []
+  const data = useMemo(() => {
+    const n = { '1M': 22, '3M': 66, '6M': 130, ALL: 100000 }[range]
+    return hist.slice(-n).map(([d, c]) => ({ d, c }))
+  }, [hist, range])
+  if (hist.length < 2) return null
+  const ip = issuePrice(r)
+  const up = data.length > 1 && data[data.length - 1].c >= (ip ?? data[0].c)
+  const color = up ? 'var(--pos)' : 'var(--neg)'
+  return (
+    <Card title="Price since listing" action={<Seg value={range} onChange={setRange} options={[{ v: '1M', label: '1M' }, { v: '3M', label: '3M' }, { v: '6M', label: '6M' }, { v: 'ALL', label: 'All' }]} />} solid>
+      <div style={{ height: 240 }}>
+        <ResponsiveContainer>
+          <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            <defs><linearGradient id="pg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.28} /><stop offset="100%" stopColor={color} stopOpacity={0} /></linearGradient></defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--hairline)" vertical={false} />
+            <XAxis dataKey="d" tick={{ fill: 'var(--ink-3)', fontSize: 11 }} axisLine={false} tickLine={false} minTickGap={40} tickFormatter={d => fmtDate(d, false)} />
+            <YAxis tick={{ fill: 'var(--ink-3)', fontSize: 11 }} axisLine={false} tickLine={false} domain={['auto', 'auto']} width={48} />
+            <Tooltip contentStyle={{ background: 'var(--glass-solid)', border: '1px solid var(--hairline)', borderRadius: 12 }} labelFormatter={d => fmtDate(String(d))} formatter={(x) => [inr(Number(x), 2), 'Close']} />
+            {ip && <ReferenceLine y={ip} stroke="var(--ink-3)" strokeDasharray="4 4" label={{ value: `Issue ₹${ip}`, fill: 'var(--ink-3)', fontSize: 11, position: 'insideTopLeft' }} />}
+            <Area type="monotone" dataKey="c" stroke={color} strokeWidth={2} fill="url(#pg)" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+      <p className="muted text-xs">End-of-day closes, NSE archives (delayed).</p>
+    </Card>
+  )
+}
+
+// ───────── overview ─────────
 function Overview({ r }: { r: CompanyRecord }) {
   const v = useVault()
-  const rev = latest(r, 'revenue_from_operations'), pat = latest(r, 'pat'), ebitda = latest(r, 'ebitda')
-  const nl = nextLockin(r)
-  const margin = fv(ebitda) != null && fv(rev) ? (fv(ebitda)! / fv(rev)!) * 100 : null
+  const upcoming = r.events.filter(e => daysUntil(e.date) >= 0).slice(0, 6)
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        <Kpi label="Issue size" value={issueSize(r) != null ? <FactValue f={ipo(r)?.facts.total_issue ?? ipo(r)?.facts.fresh_issue} /> : '—'} sub={priceBand(r) !== '—' ? `Band ${priceBand(r)}` : 'Price band not yet announced'} />
-        <Kpi label={`Revenue ${rev?.period ?? ''}`} value={<FactValue f={rev} />} sub={revCagr(r)} />
-        <Kpi label="EBITDA margin" value={pct(margin)} sub={<span>calculated · EBITDA <FactValue f={ebitda} /></span>} />
-        <Kpi label={`PAT ${pat?.period ?? ''}`} value={<FactValue f={pat} />} tone={(fv(pat) ?? 0) < 0 ? 'neg' : ''}
-          sub={nl ? `Next unlock in ${daysUntil(nl.expiry_date)}d` : undefined} />
+      <PriceChart r={r} />
+      <div className="grid xl:grid-cols-2 gap-5">
+        <DealTeam r={r} />
+        <OfferAsFiled r={r} />
       </div>
-      <Card title="What does the company do?">
-        {r.company.overview ? <>
-          <p className="text-[17px] leading-relaxed ink2 max-w-[80ch]">{r.company.overview.summary}</p>
-          {!!r.company.overview.segments?.length && <div className="flex flex-wrap gap-2 mt-3">{r.company.overview.segments.map(s => <Pill key={s} tone="blue">{s}</Pill>)}</div>}
-          <p className="muted text-xs mt-3">Source: <SourceLine s={r.company.overview.source} /></p>
-        </> : <p className="muted">Not available — no offer document processed yet.</p>}
-      </Card>
-      <DealTeam r={r} />
-      {r.company.private_tracker && (
-        <Card title="IPO intent" solid>
-          <p><Pill tone="violet">{humanize(r.company.private_tracker.confidence)}</Pill> <span className="ink2 ml-2">Expected timing: {r.company.private_tracker.expected_timing ?? 'not stated'}</span></p>
-        </Card>
-      )}
-      <Card title="Upcoming" solid>
-        <Table rows={r.events.filter(e => daysUntil(e.date) >= 0).slice(0, 6)} empty="No upcoming events" cols={[
+      <FinancialSnapshot r={r} />
+      <Card title="Coming up" solid>
+        <Table rows={upcoming} empty="No upcoming events" cols={[
           { key: 'd', label: 'Date', render: e => <b>{fmtDate(e.date)}</b> },
           { key: 'e', label: 'Event', render: e => v.event_types[e.event_type]?.label ?? e.event_type },
-          { key: 'k', label: 'Status', render: e => <Pill tone={e.date_kind === 'actual' ? 'green' : e.date_kind === 'scheduled' ? 'blue' : 'slate'}>{e.date_kind}</Pill> },
-          { key: 'x', label: 'Detail', render: e => e.detail ?? '' },
+          { key: 'k', label: 'Status', render: e => <Pill tone={e.date_kind === 'actual' ? 'green' : e.date_kind === 'scheduled' ? 'blue' : 'slate'}>{e.date_kind === 'derived' ? 'estimated' : e.date_kind}</Pill> },
+          { key: 'x', label: 'Detail', render: e => <span className="text-sm">{e.detail ?? ''}</span> },
         ]} />
       </Card>
     </div>
   )
 }
 
-function revCagr(r: CompanyRecord) {
-  const { periods, byMetric } = finTable(r)
-  const m = byMetric.get('revenue_from_operations')
-  if (!m || periods.length < 2) return undefined
-  const a = periods[0], b = periods[periods.length - 1]
-  const g = cagr(fv(m.get(a)) ?? 0, fv(m.get(b)) ?? 0, (fyYear(b) ?? 0) - (fyYear(a) ?? 0))
-  return g == null ? undefined : `${pct(g)} CAGR ${a}–${b} (calc.)`
+function FinancialSnapshot({ r }: { r: CompanyRecord }) {
+  const rev = latest(r, 'revenue_from_operations'), pat = latest(r, 'pat'), ebitda = latest(r, 'ebitda'), nw = latest(r, 'net_worth')
+  const roe = latest(r, 'roe') ?? latest(r, 'ronw'), em = latest(r, 'ebitda_margin')
+  if (!rev && !pat) return null
+  const margin = em ? fv(em) : fv(ebitda) != null && fv(rev) ? (fv(ebitda)! / fv(rev)!) * 100 : null
+  return (
+    <Card title={`Financial snapshot · ${rev?.period ?? pat?.period ?? ''}`} solid>
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+        <M label="Revenue"><FactValue f={rev} /></M>
+        <M label="EBITDA"><FactValue f={ebitda} /></M>
+        <M label="EBITDA margin">{pct(margin)}</M>
+        <M label="PAT"><FactValue f={pat} /></M>
+        <M label="Net worth"><FactValue f={nw} /></M>
+        <M label="ROE / RoNW"><FactValue f={roe} /></M>
+      </div>
+      <p className="muted text-xs mt-3">From the offer document's restated financials. Click any figure for the page it came from.</p>
+    </Card>
+  )
 }
 
-const OFFER_ROWS = ['fresh_issue', 'ofs', 'total_issue', 'price_band_low', 'price_band_high', 'issue_price', 'lot_size', 'face_value',
-  'pre_issue_shares', 'fresh_issue_shares', 'post_issue_shares', 'promoter_pre_pct', 'promoter_post_pct', 'anchor_shares']
+function DealTeam({ r }: { r: CompanyRecord }) {
+  const contacts = ipo(r)?.intermediaries?.contacts ?? []
+  if (!contacts.length) return <Card title="Deal team" solid><p className="muted">Lead managers appear once the offer-document cover has been read.</p></Card>
+  return (
+    <Card title="Deal team (offer-document cover)" solid>
+      <Table rows={contacts} cols={[
+        { key: 'n', label: 'Firm', render: c => <div><b>{c.name}</b><div className="text-xs muted">{c.role === 'BRLM' ? 'Lead manager · runs the anchor book' : 'Registrar'}</div></div> },
+        { key: 'p', label: 'Contact', render: c => <span className="text-sm">{c.contact_person ?? '—'}{c.phone && <><br /><span className="muted">{c.phone}</span></>}</span> },
+        { key: 'e', label: 'Email', render: c => c.email ? <a onClick={e => e.stopPropagation()} href={`mailto:${c.email}?subject=${encodeURIComponent(`Anchor interest — ${r.company.name} IPO`)}`}>{c.email}</a> : '—' },
+      ]} />
+      {contacts[0]?.source && <p className="muted text-xs mt-2">Source: <SourceLine s={contacts[0].source} /></p>}
+    </Card>
+  )
+}
 
+function OfferAsFiled({ r }: { r: CompanyRecord }) {
+  const F = ipo(r)?.facts ?? {}
+  const keys = ['offer_type', 'total_issue', 'fresh_issue', 'ofs', 'drhp_total_issue', 'drhp_fresh_issue', 'drhp_ofs', 'drhp_total_issue_shares', 'drhp_fresh_issue_shares', 'drhp_ofs_shares',
+    'pre_issue_shares', 'shares_outstanding', 'face_value', 'lot_size', 'eligibility_regulation', 'anchor_portion_contemplated', 'pre_ipo_placement_contemplated', 'drhp_dated']
+  const rows = keys.filter(k => F[k]).map(k => F[k])
+  return (
+    <Card title="The offer" solid>
+      <Table rows={rows} empty="Offer details not extracted yet" cols={[
+        { key: 'm', label: 'Item', render: f => f.label ?? humanize(f.metric) },
+        { key: 'v', label: 'Value', right: true, render: f => typeof f.value === 'boolean' ? (f.value ? 'Yes' : 'No') : <FactValue f={f} /> },
+      ]} />
+      {!!r.company.promoters?.length && <p className="text-sm mt-3"><span className="eyebrow">Promoters</span><br />{r.company.promoters.join(', ')}</p>}
+    </Card>
+  )
+}
+
+// ───────── financials ─────────
+const FIN_ORDER: [string, string][] = [
+  ['revenue_from_operations', 'Revenue from operations'], ['total_income', 'Total income'], ['ebitda', 'EBITDA'], ['ebitda_margin', 'EBITDA margin'],
+  ['pbt', 'Profit before tax'], ['pat', 'Profit after tax'], ['pat_margin', 'PAT margin'], ['revenue_growth', 'Revenue growth'], ['pat_growth', 'PAT growth'],
+  ['eps_basic', 'EPS (basic, ₹)'], ['eps_diluted', 'EPS (diluted, ₹)'], ['net_worth', 'Net worth'], ['equity_share_capital', 'Equity share capital'],
+  ['total_borrowings', 'Borrowings'], ['net_debt', 'Net debt'], ['cash_and_equivalents', 'Cash & equivalents'], ['total_assets', 'Total assets'],
+  ['debt_equity', 'Debt / equity (x)'], ['roe', 'ROE'], ['ronw', 'Return on net worth'], ['roce', 'ROCE'], ['nav_per_share', 'NAV per share (₹)'],
+]
+function Financials({ r }: { r: CompanyRecord }) {
+  const { periods, byMetric } = finTable(r)
+  if (!periods.length) {
+    const queued = r.documents.some(d => ['DRHP', 'RHP', 'PROSPECTUS', 'UDRHP'].includes(d.doc_type) && /\.(pdf|zip)$/i.test(d.url))
+    return <Card solid><p className="ink2">{queued ? 'The offer document is queued for reading — restated financials appear here automatically (usually within a few refreshes).' : 'No offer document with financials is available for this company yet.'}</p></Card>
+  }
+  const val = (m: string, p: string) => fv(byMetric.get(m)?.get(p))
+  const marginOf = (num: string, mm: string, p: string) => val(mm, p) ?? (val(num, p) != null && val('revenue_from_operations', p) ? (val(num, p)! / val('revenue_from_operations', p)!) * 100 : null)
+  const chart = periods.map(p => ({ p: isStub(p) ? `${p}*` : p, Revenue: val('revenue_from_operations', p), PAT: val('pat', p), EBITDA: val('ebitda', p),
+    'EBITDA %': marginOf('ebitda', 'ebitda_margin', p), 'PAT %': marginOf('pat', 'pat_margin', p) }))
+  const src = r.documents.find(d => d.document_id === r.facts?.source_document)
+  return (
+    <div className="space-y-5">
+      <Card title="Revenue, profit and margins" solid>
+        <div style={{ height: 300 }}>
+          <ResponsiveContainer>
+            <ComposedChart data={chart} margin={{ top: 10, right: 6, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--hairline)" vertical={false} />
+              <XAxis dataKey="p" tick={{ fill: 'var(--ink-3)', fontSize: 12 }} axisLine={false} tickLine={false} />
+              <YAxis yAxisId="l" tick={{ fill: 'var(--ink-3)', fontSize: 11 }} axisLine={false} tickLine={false} width={56} tickFormatter={x => `₹${num(x)}`} />
+              <YAxis yAxisId="r" orientation="right" tick={{ fill: 'var(--ink-3)', fontSize: 11 }} axisLine={false} tickLine={false} width={40} tickFormatter={x => `${x}%`} />
+              <Tooltip contentStyle={{ background: 'var(--glass-solid)', border: '1px solid var(--hairline)', borderRadius: 12 }} formatter={(x, n) => [String(n).includes('%') ? pct(Number(x)) : crore(Number(x), 1), n]} />
+              <Legend />
+              <Bar yAxisId="l" dataKey="Revenue" fill="#0a84ff" radius={[6, 6, 0, 0]} />
+              <Bar yAxisId="l" dataKey="PAT" fill="#34c77b" radius={[6, 6, 0, 0]} />
+              <Line yAxisId="r" dataKey="EBITDA %" stroke="#ff9f0a" strokeWidth={2.5} dot={{ r: 4 }} connectNulls />
+              <Line yAxisId="r" dataKey="PAT %" stroke="#b07cff" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+        <p className="muted text-xs">₹ crore. * = part-year (stub) period. Margins are as printed in the document, or calculated where not printed.</p>
+      </Card>
+      <Card title="Restated financials (₹ crore unless stated)" solid>
+        <Table rows={FIN_ORDER.filter(([m]) => byMetric.has(m))} cols={[
+          { key: 'm', label: 'Metric', render: ([, l]) => <b>{l}</b> },
+          ...periods.map(p => ({ key: p, label: isStub(p) ? `${p} (part-year)` : p, right: true, render: ([m]: [string, string]) => <FactValue f={byMetric.get(m)?.get(p)} /> })),
+        ]} />
+        <p className="muted text-xs mt-3">Source: {src ? <a href={src.url} target="_blank" rel="noreferrer">{src.doc_type} · {fmtDate(src.filing_date)}</a> : 'offer document'} — values read from the restated summary financials and KPI tables; each figure links to its page. Values that contradicted the document's own statements were dropped rather than shown.</p>
+      </Card>
+    </div>
+  )
+}
+
+// ───────── valuation ─────────
+function WhatIf({ V }: { V: ReturnType<typeof valuationInputs> }) {
+  const [mode, setMode] = useState<'mcap' | 'price'>(V.shares.value ? 'price' : 'mcap')
+  const [x, setX] = useState('')
+  const n = parseFloat(x.replace(/,/g, ''))
+  const mcap = !isFinite(n) || n <= 0 ? null : mode === 'mcap' ? n : V.shares.value ? (n * V.shares.value) / 1e7 : null
+  const g = (f: Fact | null | undefined) => fv(f)
+  const post = mcap != null && V.inputs.fresh ? mcap + V.inputs.fresh : null
+  const nd = g(V.inputs.debt) != null && g(V.inputs.cash) != null ? g(V.inputs.debt)! - g(V.inputs.cash)! : null
+  const ev = mcap != null && nd != null ? mcap + nd : null
+  const ratio = (a: number | null, b: number | null | undefined, pos = false) => a == null || !b || (pos && b <= 0) ? '—' : `${(a / b).toFixed(1)}x`
+  return (
+    <Card title="What-if valuation" solid>
+      <p className="muted text-sm mb-3">Type a market cap or a share price to see the implied multiples on the latest full-year figures. Useful for DRHPs before a price band.</p>
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <Seg value={mode} onChange={setMode} options={[{ v: 'mcap', label: 'Market cap ₹ cr' }, ...(V.shares.value ? [{ v: 'price' as const, label: 'Price ₹/share' }] : [])]} />
+        <input className="input !h-10 !w-48" inputMode="decimal" placeholder={mode === 'mcap' ? 'e.g. 5000' : 'e.g. 450'} value={x} onChange={e => setX(e.target.value)} />
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        {[['Market cap', crore(mcap)], ['P/E', ratio(mcap, g(V.inputs.pat), true)], ['P/B', ratio(mcap, g(V.inputs.nw))], ['P/S', ratio(mcap, g(V.inputs.rev))], ['EV/EBITDA', ratio(ev, g(V.inputs.ebitda), true)]].map(([l, val]) => (
+          <div key={l} className="glass p-3"><div className="eyebrow">{l}</div><div className="display text-[22px] font-semibold">{val}</div></div>
+        ))}
+      </div>
+      {post != null && <p className="muted text-xs mt-3">If the market cap typed is pre-money, post-money including the fresh issue is {crore(post)}. EV = mcap + borrowings − cash.</p>}
+    </Card>
+  )
+}
+
+function Valuation({ r }: { r: CompanyRecord }) {
+  const V = valuationInputs(r)
+  const peers = r.facts?.peers ?? []
+  const fmtX = (x: number | null) => (x == null ? '—' : `${x.toFixed(1)}x`)
+  const rows: { label: string; get: (p: typeof V.points[number]) => string; note?: string }[] = [
+    { label: 'Share price', get: p => inr(p.price, 2) },
+    { label: 'Market cap', get: p => crore(p.mcap) },
+    { label: `P/E (${V.inputs.pat?.period ?? 'latest FY'})`, get: p => (V.lossMaking ? 'Loss-making' : fmtX(p.pe)) },
+    { label: `P/B (${V.inputs.nw?.period ?? 'latest FY'} net worth)`, get: p => fmtX(p.pb) },
+    { label: `Price / sales (${V.inputs.rev?.period ?? 'latest FY'})`, get: p => fmtX(p.ps) },
+    { label: 'Enterprise value', get: p => crore(p.ev), note: 'mcap + borrowings − cash − fresh-issue proceeds' },
+    { label: `EV / EBITDA (${V.inputs.ebitda?.period ?? 'latest FY'})`, get: p => fmtX(p.evEbitda) },
+  ]
+  return (
+    <div className="space-y-5">
+      <Card title="Valuation inputs" solid>
+        <p className="muted text-sm mb-3">Mechanical calculations from disclosed figures — inputs for your own model, not a view on value.</p>
+        <div className="tbl-wrap"><table className="tbl">
+          <thead><tr><th>Metric</th>{V.points.map(p => <th key={p.key} className="r">{p.label}</th>)}</tr></thead>
+          <tbody>{rows.map(row => (
+            <tr key={row.label}><td className="td-primary" data-label="">{row.label}{row.note && <div className="muted text-xs">{row.note}</div>}</td>
+              {V.points.map(p => <td key={p.key} className="r" data-label={p.label}>{p.price ? row.get(p) : '—'}</td>)}</tr>
+          ))}</tbody>
+        </table></div>
+        <div className="grid md:grid-cols-2 gap-x-8 gap-y-1 mt-4 text-sm ink2">
+          <div>Share count: <b>{V.shares.value ? shares(V.shares.value) : 'not available'}</b> <span className="muted">({V.shares.basis || 'needs capital structure'})</span></div>
+          <div>PAT: <FactValue f={V.inputs.pat} /> · EBITDA: <FactValue f={V.inputs.ebitda} /></div>
+          <div>Net worth: <FactValue f={V.inputs.nw} /> · Revenue: <FactValue f={V.inputs.rev} /></div>
+          <div>Borrowings: <FactValue f={V.inputs.debt} /> · Cash: <FactValue f={V.inputs.cash} /></div>
+        </div>
+      </Card>
+      <WhatIf V={V} />
+      <Card title="Listed peers (from the offer document)" solid>
+        <Table rows={peers} empty="No peer comparison table found in the offer document" cols={[
+          { key: 'n', label: 'Company', render: p => <b className={p.name.toLowerCase().includes(r.company.name.toLowerCase().split(' ')[0]) ? '' : ''}>{p.name}</b> },
+          { key: 'pr', label: 'Price (₹)', right: true, render: p => (p.price != null ? num(p.price, 2) : '—'), sort: p => p.price ?? null },
+          { key: 'mc', label: 'Market cap', right: true, render: p => (p.mcap != null ? num(p.mcap, 0) : '—'), sort: p => p.mcap ?? null },
+          { key: 'pe', label: 'P/E', right: true, render: p => (p.pe != null ? `${p.pe.toFixed(1)}x` : '—'), sort: p => p.pe ?? null },
+          { key: 'pb', label: 'P/B', right: true, render: p => (p.pb != null ? `${p.pb.toFixed(1)}x` : '—') },
+          { key: 'eps', label: 'EPS (₹)', right: true, render: p => (p.eps_basic != null ? num(p.eps_basic, 2) : '—') },
+          { key: 'ronw', label: 'RoNW', right: true, render: p => pct(p.ronw) },
+          { key: 'nav', label: 'NAV (₹)', right: true, render: p => (p.nav != null ? num(p.nav, 2) : '—') },
+        ]} />
+        {peers[0]?.source && <p className="muted text-xs mt-2">Source: <SourceLine s={peers[0].source} />. Market cap / income in the document's unit (usually ₹ million or ₹ lakh); peer prices are as of the document date.</p>}
+      </Card>
+    </div>
+  )
+}
+
+// ───────── industry ─────────
+function Industry({ r }: { r: CompanyRecord }) {
+  const claims = r.facts?.industry_claims ?? []
+  const [q, setQ] = useState('')
+  const shown = claims.filter(c => !q || c.text.toLowerCase().includes(q.toLowerCase()))
+  if (!claims.length) return <Card solid><p className="ink2">Industry statistics appear once the offer document's Industry Overview has been read.</p></Card>
+  const withCagr = claims.filter(c => c.cagr_pct != null)
+  return (
+    <div className="space-y-5">
+      <div className="glass panel p-4 text-sm ink2">Quantitative statements exactly as printed in the offer document's <b>Industry Overview</b> (usually commissioned from CRISIL, Frost & Sullivan, Redseer, etc.). Nothing here is rewritten or estimated.</div>
+      {!!withCagr.length && (
+        <Card title="Growth rates disclosed" solid>
+          <div className="grid md:grid-cols-2 gap-3">
+            {withCagr.slice(0, 8).map((c, i) => (
+              <div key={i} className="glass panel p-3">
+                <div className="display text-[26px] font-semibold">{c.cagr_pct}% <span className="text-sm muted font-normal">CAGR{c.years?.length ? ` · ${c.years.slice(0, 2).join('–')}` : ''}</span></div>
+                <div className="text-sm ink2 mt-1">{c.text.length > 220 ? c.text.slice(0, 220) + '…' : c.text}</div>
+                <div className="muted text-xs mt-1">p.{c.page}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+      <Card title={`All statements (${claims.length})`} action={<input className="input !h-9 !w-56" placeholder="Search statements…" value={q} onChange={e => setQ(e.target.value)} />} solid>
+        <ul className="space-y-3">
+          {shown.map((c, i) => (
+            <li key={i} className="flex gap-3">
+              <span className="pill tone-slate shrink-0 h-fit">p.{c.page}</span>
+              <div className="text-[15px] ink2">{c.text}
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {c.cagr_pct != null && <Pill tone="green">{c.cagr_pct}% CAGR</Pill>}
+                  {c.amounts?.map((a, k) => <Pill key={k} tone="blue">{num(a.value, 2)} {a.unit}</Pill>)}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+        {claims[0]?.source && <p className="muted text-xs mt-3">Source: <SourceLine s={claims[0].source} /></p>}
+      </Card>
+    </div>
+  )
+}
+
+// ───────── IPO ─────────
+const OFFER_ROWS = ['fresh_issue', 'ofs', 'total_issue', 'issue_type', 'price_band_low', 'price_band_high', 'issue_price', 'lot_size', 'face_value',
+  'pre_issue_shares', 'fresh_issue_shares', 'ofs_shares', 'post_issue_shares', 'shares_outstanding', 'anchor_shares', 'shares_offered_ex_anchor', 'issue_size_text']
 function IpoTab({ r }: { r: CompanyRecord }) {
   const o = ipo(r)
-  if (!o) return <Card>No offering recorded.</Card>
-  const rows = [...OFFER_ROWS.filter(k => o.facts[k]), ...Object.keys(o.facts).filter(k => !OFFER_ROWS.includes(k))].map(k => o.facts[k])
+  if (!o) return <Card solid>No offering details yet — they appear when the issue is announced on the exchange.</Card>
+  const rows = [...OFFER_ROWS.filter(k => o.facts[k]), ...Object.keys(o.facts).filter(k => !OFFER_ROWS.includes(k) && !k.startsWith('drhp_'))].map(k => o.facts[k])
   return (
     <div className="grid xl:grid-cols-[1.4fr_1fr] gap-5">
       <Card title="Offer structure" solid>
         <Table rows={rows} cols={[
-          { key: 'm', label: 'Metric', render: f => f.label ?? humanize(f.metric) },
-          { key: 'v', label: 'Value', right: true, render: f => <FactValue f={f} /> },
-          { key: 'k', label: 'Type', right: true, render: f => <Pill tone={f.kind === 'reported' ? 'slate' : 'violet'}>{f.kind}</Pill> },
-          { key: 's', label: 'Source', render: f => <span className="text-sm"><SourceLine s={f.source} /></span> },
+          { key: 'm', label: 'Item', render: (f: Fact) => f.label ?? humanize(f.metric) },
+          { key: 'v', label: 'Value', right: true, render: (f: Fact) => f.unit === 'text' ? <span className="text-sm">{String(f.value)}</span> : <FactValue f={f} /> },
+          { key: 'k', label: 'Type', right: true, hideMobile: true, render: (f: Fact) => <Pill tone={f.kind === 'reported' ? 'slate' : 'violet'}>{f.kind}</Pill> },
         ]} />
       </Card>
-      <Card title="Issue mix" solid>
+      <Card title="Issue" solid>
         <IssueMix facts={o.facts} />
-        <div className="mt-4 text-sm ink2">
+        <div className="mt-4 text-sm ink2 space-y-1">
           <div>Exchanges: <b>{o.exchanges?.join(', ') || '—'}</b></div>
-          <div>BRLMs: <b>{o.intermediaries?.brlms?.join(', ') || '—'}</b></div>
+          <div>Lead managers: <b>{o.intermediaries?.brlms?.join(', ') || '—'}</b></div>
           <div>Registrar: <b>{o.intermediaries?.registrar ?? '—'}</b></div>
-          {o.subscription?.total_times != null && <div className="mt-3"><span className="eyebrow block">Subscription (NSE, total)</span>
-            <span className="display text-[30px] font-semibold">{o.subscription.total_times.toFixed(2)}x</span>
-            <span className="muted text-xs block">as of {fmtDateTime(o.subscription.as_of)}</span></div>}
         </div>
+        {o.subscription?.total_times != null && <div className="mt-4"><span className="eyebrow block">Subscription (total)</span>
+          <span className="display text-[30px] font-semibold">{o.subscription.total_times.toFixed(2)}x</span>
+          <span className="muted text-xs block">as of {fmtDateTime(o.subscription.as_of)}</span></div>}
       </Card>
     </div>
   )
 }
-
 function IssueMix({ facts }: { facts: Record<string, Fact> }) {
-  const fresh = fv(facts.fresh_issue), ofs = fv(facts.ofs)
-  if (fresh == null || ofs == null) return <p className="muted">Fresh / OFS split not available</p>
+  const fresh = fv(facts.fresh_issue) ?? 0, ofs = fv(facts.ofs) ?? 0
   const t = fresh + ofs
+  if (!t) return <p className="muted">Fresh / OFS split not available</p>
   return (
     <div>
       <div className="flex h-4 rounded-full overflow-hidden">
         <div style={{ width: `${(fresh / t) * 100}%`, background: 'var(--accent)' }} />
         <div style={{ width: `${(ofs / t) * 100}%`, background: '#b07cff' }} />
       </div>
-      <div className="flex justify-between mt-2 text-sm">
+      <div className="flex justify-between mt-2 text-sm flex-wrap gap-2">
         <span><b style={{ color: 'var(--accent)' }}>●</b> Fresh {crore(fresh)} · {pct((fresh / t) * 100, 0)}</span>
         <span><b style={{ color: '#b07cff' }}>●</b> OFS {crore(ofs)} · {pct((ofs / t) * 100, 0)}</span>
       </div>
@@ -155,127 +422,20 @@ function IssueMix({ facts }: { facts: Record<string, Fact> }) {
   )
 }
 
-const FIN_ROWS: [string, string][] = [['revenue_from_operations', 'Revenue from operations'], ['ebitda', 'EBITDA'], ['depreciation', 'D&A'],
-  ['ebit', 'EBIT'], ['finance_cost', 'Finance cost'], ['other_income', 'Other income'], ['pbt', 'PBT'], ['tax', 'Tax'], ['pat', 'PAT'],
-  ['total_debt', 'Total debt'], ['cash', 'Cash & equivalents']]
-
-function Financials({ r }: { r: CompanyRecord }) {
-  const { periods, byMetric } = finTable(r)
-  if (!periods.length) return <Card>Financials not available yet.</Card>
-  const val = (m: string, p: string) => fv(byMetric.get(m)?.get(p))
-  const chart = periods.map(p => ({ p, Revenue: val('revenue_from_operations', p), EBITDA: val('ebitda', p),
-    'EBITDA margin %': val('ebitda', p) != null && val('revenue_from_operations', p) ? +((val('ebitda', p)! / val('revenue_from_operations', p)!) * 100).toFixed(1) : null }))
-  const ratios: [string, (p: string) => number | null][] = [
-    ['EBITDA margin', p => div(val('ebitda', p), val('revenue_from_operations', p))],
-    ['EBIT margin', p => div(val('ebit', p), val('revenue_from_operations', p))],
-    ['PAT margin', p => div(val('pat', p), val('revenue_from_operations', p))],
-    ['Revenue growth', p => { const i = periods.indexOf(p); return i > 0 ? growth(val('revenue_from_operations', periods[i - 1]), val('revenue_from_operations', p)) : null }],
-    ['PAT growth', p => { const i = periods.indexOf(p); return i > 0 ? growth(val('pat', periods[i - 1]), val('pat', p)) : null }],
-  ]
-  return (
-    <div className="space-y-5">
-      <Card title="Revenue, EBITDA and margin" solid>
-        <div style={{ height: 300 }}>
-          <ResponsiveContainer>
-            <ComposedChart data={chart} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--hairline)" vertical={false} />
-              <XAxis dataKey="p" tick={{ fill: 'var(--ink-3)', fontSize: 13 }} axisLine={false} tickLine={false} />
-              <YAxis yAxisId="l" tick={{ fill: 'var(--ink-3)', fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={x => `₹${x}`} />
-              <YAxis yAxisId="r" orientation="right" tick={{ fill: 'var(--ink-3)', fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={x => `${x}%`} />
-              <Tooltip contentStyle={{ background: 'var(--glass-solid)', border: '1px solid var(--hairline)', borderRadius: 12 }} />
-              <Legend />
-              <Bar yAxisId="l" dataKey="Revenue" fill="#0a84ff" radius={[6, 6, 0, 0]} />
-              <Bar yAxisId="l" dataKey="EBITDA" fill="#7d5cff" radius={[6, 6, 0, 0]} />
-              <Line yAxisId="r" dataKey="EBITDA margin %" stroke="#ff9f0a" strokeWidth={2.5} dot={{ r: 4 }} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-        <p className="muted text-xs">₹ crore, restated consolidated. Margin is calculated.</p>
-      </Card>
-      <Card title="Restated financials (₹ crore)" solid>
-        <Table rows={FIN_ROWS.filter(([m]) => byMetric.has(m))} cols={[
-          { key: 'm', label: 'Metric', render: ([, l]) => <b>{l}</b> },
-          ...periods.map(p => ({ key: p, label: p, right: true, render: ([m]: [string, string]) => <FactValue f={byMetric.get(m)?.get(p)} /> })),
-        ]} />
-      </Card>
-      <Card title="Calculated ratios" solid>
-        <Table rows={ratios} cols={[
-          { key: 'm', label: 'Ratio', render: ([l]) => <b>{l}</b> },
-          ...periods.map(p => ({ key: p, label: p, right: true, render: ([, fn]: [string, (p: string) => number | null]) => {
-            const x = fn(p); return <span className={x != null && x < 0 ? 'neg' : ''}>{pct(x)}</span> } })),
-        ]} />
-        <p className="muted text-xs mt-2">ROE / ROCE need balance-sheet equity and capital employed — extracted in Phase 5.</p>
-      </Card>
-    </div>
-  )
-}
-const div = (a: number | null, b: number | null) => (a != null && b ? (a / b) * 100 : null)
-const growth = (a: number | null, b: number | null) => (a != null && b != null && a > 0 ? ((b / a) - 1) * 100 : null)
-
-function Industry({ r }: { r: CompanyRecord }) {
-  const facts = r.facts?.industry ?? []
-  if (!facts.length) return <Card>Industry statistics have not been extracted from the offer document yet.</Card>
-  const groups = new Map<string, Fact[]>()
-  for (const f of facts) { if (!groups.has(f.metric)) groups.set(f.metric, []); groups.get(f.metric)!.push(f) }
-  const size = (groups.get('industry_market_size') ?? []).filter(f => fyYear(f.period)).sort((a, b) => fyYear(a.period)! - fyYear(b.period)!)
-  const rev = finTable(r)
-  const revM = rev.byMetric.get('revenue_from_operations')
-  const histInd = size.filter(f => !f.period?.endsWith('E'))
-  const fwdInd = size.filter(f => f.period?.endsWith('E'))
-  const indCagr = histInd.length >= 2 ? cagr(fv(histInd[0])!, fv(histInd.at(-1))!, fyYear(histInd.at(-1)!.period)! - fyYear(histInd[0].period)!) : null
-  const fwdCagr = histInd.length && fwdInd.length ? cagr(fv(histInd.at(-1))!, fv(fwdInd.at(-1))!, fyYear(fwdInd.at(-1)!.period)! - fyYear(histInd.at(-1)!.period)!) : null
-  const ps = rev.periods
-  const coCagr = revM && ps.length >= 2 ? cagr(fv(revM.get(ps[0])) ?? 0, fv(revM.get(ps.at(-1)!)) ?? 0, fyYear(ps.at(-1))! - fyYear(ps[0])!) : null
-  return (
-    <div className="space-y-5">
-      <div className="glass panel p-4 text-sm ink2">Only quantitative statements disclosed in the offer document are used here. Every figure links to its page.</div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Kpi label={`Industry CAGR ${histInd[0]?.period ?? ''}–${histInd.at(-1)?.period ?? ''}`} value={pct(indCagr)} sub="calculated from disclosed market size" />
-        <Kpi label={`Industry CAGR to ${fwdInd.at(-1)?.period ?? '—'}`} value={pct(fwdCagr)} sub="offer-document projection" />
-        <Kpi label={`Company revenue CAGR ${ps[0] ?? ''}–${ps.at(-1) ?? ''}`} value={pct(coCagr)}
-          sub={coCagr != null && indCagr ? `${(coCagr / indCagr).toFixed(1)}× industry growth (different windows — compare with care)` : undefined} />
-      </div>
-      {[...groups.entries()].map(([metric, fs]) => (
-        <Card key={metric} title={fs[0].label ?? humanize(metric)} solid>
-          <Table rows={[fs]} cols={fs.map(f => ({ key: f.fact_id, label: f.period ?? '—', right: true, render: () => <FactValue f={f} /> }))} />
-          <p className="muted text-xs mt-2">Source: <SourceLine s={fs[0].source} /></p>
-        </Card>
-      ))}
-    </div>
-  )
-}
-
-function Valuation({ r }: { r: CompanyRecord }) {
-  const rows = valuationInputs(r)
-  return (
-    <Card title="Implied valuation inputs at issue price" solid>
-      <p className="muted text-sm mb-3">Mechanical calculations from disclosed figures — inputs for your own model, not a view on value.</p>
-      <Table rows={rows} cols={[
-        { key: 'l', label: 'Metric', render: x => <b>{x.label}</b> },
-        { key: 'v', label: 'Value', right: true, render: x => !x.meaningful ? <span className="muted">{x.why ?? 'Not available'}</span>
-            : x.unit === 'x' ? `${x.value!.toFixed(1)}x` : crore(x.value) },
-        { key: 'f', label: 'Formula', render: x => <span className="muted text-sm">{x.formula}</span> },
-      ]} />
-      <p className="muted text-xs mt-3">Uses final issue price where known, otherwise upper end of the price band ({inrBand(r)}).</p>
-    </Card>
-  )
-}
-const inrBand = (r: CompanyRecord) => issuePrice(r) != null ? `₹${issuePrice(r)}` : 'n/a'
-
+// ───────── timeline / lock-ins / documents / news ─────────
 function Timeline({ r }: { r: CompanyRecord }) {
   const v = useVault()
   return (
     <Card title="Lifecycle" solid>
-      <ol className="relative ml-3">
+      <ol className="relative ml-2">
         {r.events.map(e => {
           const past = daysUntil(e.date) < 0
           return (
             <li key={e.event_id} className="pl-6 pb-5 relative" style={{ borderLeft: '2px solid var(--hairline)' }}>
               <span className="absolute -left-[7px] top-1.5 w-3 h-3 rounded-full" style={{ background: past ? 'var(--ink-3)' : e.date_kind === 'derived' ? '#b07cff' : 'var(--accent)' }} />
               <div className="flex flex-wrap items-center gap-2">
-                <b>{fmtDate(e.date)}</b>
-                <span>{v.event_types[e.event_type]?.label ?? e.event_type}</span>
-                <Pill tone={e.date_kind === 'actual' ? 'green' : e.date_kind === 'scheduled' ? 'blue' : 'violet'}>{e.date_kind}</Pill>
+                <b>{fmtDate(e.date)}</b><span>{v.event_types[e.event_type]?.label ?? e.event_type}</span>
+                <Pill tone={e.date_kind === 'actual' ? 'green' : e.date_kind === 'scheduled' ? 'blue' : 'violet'}>{e.date_kind === 'derived' ? 'estimated' : e.date_kind}</Pill>
               </div>
               {e.detail && <div className="ink2 text-[15px]">{e.detail}</div>}
               <div className="muted text-xs">{e.source ? <SourceLine s={e.source} /> : e.rule_id ? `Rule ${e.rule_id}` : ''}</div>
@@ -286,120 +446,102 @@ function Timeline({ r }: { r: CompanyRecord }) {
     </Card>
   )
 }
-
 function LockinTab({ r }: { r: CompanyRecord }) {
   return (
     <Card title="Lock-in tranches" solid>
-      <Table rows={r.lockins} empty="No lock-ins computed (needs allotment date and capital-structure figures)" cols={[
+      <Table rows={r.lockins} empty="No lock-ins computed (needs allotment date and anchor / capital-structure figures)" cols={[
         { key: 'h', label: 'Holder', render: l => <b>{holder(l.holder_category)}</b> },
-        { key: 's', label: 'Shares', right: true, render: l => <FactValue f={l.shares} /> },
-        { key: 'p', label: '% post-issue', right: true, render: l => <FactValue f={l.pct_post_issue} /> },
-        { key: 'st', label: 'From (allotment)', right: true, render: l => fmtDate(l.start_date) },
         { key: 'e', label: 'Expiry', right: true, render: l => <b>{fmtDate(l.expiry_date)}</b> },
         { key: 'u', label: 'Status', right: true, render: l => { const d = daysUntil(l.expiry_date), u = urgency(d); return <Pill tone={u.tone}>{d < 0 ? 'Expired' : `${d}d`}</Pill> } },
-        { key: 'r', label: 'Rule', render: l => <span className="text-sm">{l.rule_id} {!l.rule_verified && <Pill tone="amber">unverified rule</Pill>}</span> },
+        { key: 's', label: 'Shares', right: true, render: l => <FactValue f={l.shares} /> },
+        { key: 'p', label: '% of shares out', right: true, render: l => <FactValue f={l.pct_post_issue} /> },
+        { key: 'r', label: 'Rule', hideMobile: true, render: l => <span className="text-sm">{l.rule_id} {!l.rule_verified && <Pill tone="amber">unverified rule</Pill>}</span> },
       ]} />
-      <p className="muted text-xs mt-3">Unlocked shares become eligible for sale; that does not mean they will be sold.</p>
+      <p className="muted text-xs mt-3">Lock-ins run from the allotment date. Unlocked shares become eligible for sale; that does not mean they will be sold.</p>
     </Card>
   )
 }
-
 function Docs({ r }: { r: CompanyRecord }) {
+  const rows = [...r.documents].sort((a, b) => (b.filing_date ?? '').localeCompare(a.filing_date ?? ''))
   return (
     <Card title="Documents" solid>
-      <Table rows={r.documents} empty="No documents registered" cols={[
+      <Table rows={rows} empty="No documents registered" cols={[
+        { key: 'f', label: 'Filed', render: d => fmtDate(d.filing_date), sort: d => d.filing_date ?? '' },
         { key: 't', label: 'Type', render: d => <Pill tone="blue">{d.doc_type}</Pill> },
-        { key: 'n', label: 'Document', render: d => d.url.startsWith('http') ? <a href={d.url} target="_blank" rel="noreferrer">{d.title ?? d.document_id}</a> : (d.title ?? d.document_id) },
-        { key: 'f', label: 'Filed', right: true, render: d => fmtDate(d.filing_date) },
-        { key: 'v', label: 'Version', right: true, render: d => `v${d.version}` },
-        { key: 'p', label: 'Pages', right: true, render: d => d.pages ?? '—' },
-        { key: 'h', label: 'SHA-256', render: d => <code className="text-xs muted">{d.sha256?.slice(0, 12) ?? '—'}</code> },
+        { key: 'n', label: 'Document', render: d => <a href={d.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>{d.title ?? d.document_id}</a> },
+        { key: 'p', label: 'Pages', right: true, hideMobile: true, render: d => d.pages ?? '—' },
+        { key: 'x', label: 'Read', right: true, render: d => { const ex = (d as unknown as { extraction?: { status?: string } }).extraction; return ex?.status === 'ok' ? <Pill tone="green">read</Pill> : ex?.status ? <Pill tone="amber">{ex.status}</Pill> : <span className="muted">—</span> } },
       ]} />
     </Card>
   )
 }
-
 function NewsTab({ r }: { r: CompanyRecord }) {
   return (
-    <Card title="News & announcements" solid>
-      <Table rows={r.news} empty="No news yet" cols={[
-        { key: 't', label: 'Time', render: n => fmtDateTime(n.published_at) },
+    <Card title="Exchange announcements & news" solid>
+      <Table rows={r.news} empty="No announcements yet" search={n => `${n.title} ${n.category}`} cols={[
+        { key: 't', label: 'Time', render: n => fmtDateTime(n.published_at), sort: n => n.published_at },
+        { key: 'h', label: 'Headline', primary: true, render: n => n.url.startsWith('http') ? <a href={n.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>{n.title}</a> : n.title },
         { key: 'c', label: 'Type', render: n => <Pill tone={n.tier === 'official' ? 'blue' : 'slate'}>{n.category.replace(/_/g, ' ')}</Pill> },
-        { key: 'h', label: 'Headline', render: n => n.url.startsWith('http') ? <a href={n.url} target="_blank" rel="noreferrer">{n.title}</a> : n.title },
-        { key: 'p', label: 'Source', render: n => n.publisher ?? '—' },
       ]} />
     </Card>
   )
 }
 
-function ChangesTab({ r }: { r: CompanyRecord }) {
-  const v = useVault()
-  const rows = v.changes.filter(c => c.company_id === r.company.company_id)
-  return (
-    <Card title="Detected changes" solid>
-      <Table rows={rows} empty="No changes detected" cols={[
-        { key: 'd', label: 'Detected', render: c => fmtDateTime(c.detected_at) },
-        { key: 'l', label: 'Change', render: c => <b>{c.label ?? c.field}</b> },
-        { key: 'o', label: 'From', render: c => <s className="muted">{c.old == null ? '—' : String(c.old)}</s> },
-        { key: 'n', label: 'To', render: c => <b>{String(c.new)}</b> },
-        { key: 's', label: 'Source', render: c => <SourceLine s={c.source} /> },
-      ]} />
-    </Card>
-  )
-}
-
-function DealTeam({ r }: { r: CompanyRecord }) {
-  const o = ipo(r)
-  const contacts = o?.intermediaries?.contacts ?? []
-  const F = o?.facts ?? {}
-  const rows = ['offer_type', 'drhp_fresh_issue', 'drhp_ofs', 'drhp_total_issue', 'drhp_fresh_issue_shares', 'drhp_ofs_shares', 'drhp_total_issue_shares',
-    'eligibility_regulation', 'anchor_portion_contemplated', 'pre_ipo_placement_contemplated', 'drhp_dated'].filter(k => F[k])
-  if (!contacts.length && !rows.length && !r.company.promoters?.length) return null
-  return (
-    <div className="grid xl:grid-cols-2 gap-5">
-      <Card title="Deal team (offer-document cover)" solid>
-        <Table rows={contacts} empty="Not extracted yet" cols={[
-          { key: 'r', label: 'Role', render: c => <Pill tone={c.role === 'BRLM' ? 'blue' : 'slate'}>{c.role === 'BRLM' ? 'Lead manager' : 'Registrar'}</Pill> },
-          { key: 'n', label: 'Firm', render: c => <b>{c.name}</b> },
-          { key: 'p', label: 'Contact', render: c => <div className="text-sm">{c.contact_person ?? ''}{c.phone && <div className="muted">{c.phone}</div>}</div> },
-          { key: 'e', label: 'Email', render: c => c.email ? <a href={`mailto:${c.email}?subject=${encodeURIComponent(`Anchor interest — ${r.company.name} IPO`)}`}>{c.email}</a> : '—' },
-        ]} />
-        {contacts[0]?.source && <p className="muted text-xs mt-2">Source: <SourceLine s={contacts[0].source} /></p>}
-      </Card>
-      <Card title="Offer as filed" solid>
-        <Table rows={rows.map(k => F[k])} cols={[
-          { key: 'm', label: 'Item', render: f => f.label ?? humanize(f.metric) },
-          { key: 'v', label: 'Value', right: true, render: f => typeof f.value === 'boolean' ? (f.value ? 'Yes' : 'No') : <FactValue f={f} /> },
-        ]} />
-        {!!r.company.promoters?.length && <p className="text-sm mt-3"><span className="eyebrow">Promoters</span><br />{r.company.promoters.join(', ')}</p>}
-      </Card>
-    </div>
-  )
-}
-
-function HoldingForm({ id, onDone }: { id: string; onDone: () => void }) {
+// ───────── holding form (listed, allotment, anchor, pre-IPO) ─────────
+function HoldingForm({ r, onDone }: { r: CompanyRecord; onDone: () => void }) {
   const { pf, setPf } = usePf()
+  const id = r.company.company_id
   const cur = pf.holdings.find(h => h.company_id === id)
-  const [q, setQ] = useState(String(cur?.quantity ?? ''))
-  const [c, setC] = useState(String(cur?.avg_cost ?? ''))
+  const listed = !!listedOn(r)
+  const [route, setRoute] = useState(cur?.route ?? (listed ? 'ALLOTMENT' : 'PRE_IPO'))
+  const [q, setQ] = useState(cur?.quantity ? String(cur.quantity) : '')
+  const [c, setC] = useState(cur?.avg_cost ? String(cur.avg_cost) : '')
   const [d, setD] = useState(cur?.acquired_on ?? new Date().toISOString().slice(0, 10))
-  const [route, setRoute] = useState(cur?.route ?? 'ANCHOR')
+  const [ev, setEv] = useState(cur?.entry_valuation_cr ? String(cur.entry_valuation_cr) : '')
+  const [inv, setInv] = useState(cur?.invested_cr ? String(cur.invested_cr) : '')
+  const [lr, setLr] = useState(cur?.latest_round_cr ? String(cur.latest_round_cr) : '')
+  const [lrd, setLrd] = useState(cur?.latest_round_on ?? '')
+  const [err, setErr] = useState('')
+  const n = (x: string) => (x.trim() ? Number(x.replace(/[,₹\s]/g, '')) : null)
   const save = () => {
-    const quantity = Number(q.replace(/,/g, '')), avg_cost = Number(c.replace(/[,₹]/g, ''))
-    if (!(quantity > 0) || !(avg_cost >= 0)) return
-    setPf({ ...pf, holdings: [...pf.holdings.filter(h => h.company_id !== id), { company_id: id, quantity, avg_cost, acquired_on: d, route }] })
+    const h: Holding = { company_id: id, route, acquired_on: d, quantity: n(q) ?? 0, avg_cost: n(c) ?? 0,
+      entry_valuation_cr: n(ev), invested_cr: n(inv), latest_round_cr: n(lr), latest_round_on: lrd || null }
+    if (!(h.quantity > 0 && h.avg_cost > 0) && !(h.entry_valuation_cr && (h.invested_cr || h.quantity))) {
+      setErr(route === 'PRE_IPO' ? 'Enter quantity + price per share, or entry valuation + amount invested.' : 'Enter quantity and average cost.'); return
+    }
+    setPf({ ...pf, holdings: [...pf.holdings.filter(x => x.company_id !== id), h] })
     onDone()
   }
+  const preview = holdingMarks(r, { company_id: id, route, acquired_on: d, quantity: n(q) ?? 0, avg_cost: n(c) ?? 0, entry_valuation_cr: n(ev), invested_cr: n(inv), latest_round_cr: n(lr), latest_round_on: lrd || null })
   return (
-    <div className="glass panel p-4 mt-4 grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
-      <label className="text-sm">Quantity<input className="input mt-1" value={q} onChange={e => setQ(e.target.value)} inputMode="numeric" /></label>
-      <label className="text-sm">Avg cost ₹<input className="input mt-1" value={c} onChange={e => setC(e.target.value)} inputMode="decimal" /></label>
-      <label className="text-sm">Date<input className="input mt-1" type="date" value={d} onChange={e => setD(e.target.value)} /></label>
-      <label className="text-sm">Route<select className="input mt-1" value={route} onChange={e => setRoute(e.target.value)}>
-        {['ANCHOR', 'ALLOTMENT', 'PRE_IPO', 'MARKET'].map(x => <option key={x}>{x}</option>)}</select></label>
-      <div className="flex gap-2"><button className="btn btn-primary" onClick={save}>Save</button>
-        {cur && <button className="btn" onClick={() => { setPf({ ...pf, holdings: pf.holdings.filter(h => h.company_id !== id) }); onDone() }}>Remove</button>}</div>
-      <p className="muted text-xs col-span-full">Stored only in this browser. Use Portfolio → Export to move it to another device.</p>
+    <div className="glass panel p-4 mt-5 space-y-3">
+      <div className="flex flex-wrap gap-2 items-center"><span className="eyebrow mr-1">How we hold it</span>
+        <Seg value={route} onChange={setRoute} options={[{ v: 'PRE_IPO', label: 'Pre-IPO' }, { v: 'ANCHOR', label: 'Anchor' }, { v: 'ALLOTMENT', label: 'IPO allotment' }, { v: 'MARKET', label: 'Bought in market' }]} /></div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <label className="text-sm">Date invested<input className="input mt-1" type="date" value={d} onChange={e => setD(e.target.value)} /></label>
+        <label className="text-sm">Quantity (shares)<input className="input mt-1" value={q} onChange={e => setQ(e.target.value)} inputMode="numeric" placeholder="optional for pre-IPO" /></label>
+        <label className="text-sm">Price per share ₹<input className="input mt-1" value={c} onChange={e => setC(e.target.value)} inputMode="decimal" /></label>
+        {route === 'PRE_IPO' && <label className="text-sm">Amount invested ₹ cr<input className="input mt-1" value={inv} onChange={e => setInv(e.target.value)} inputMode="decimal" /></label>}
+      </div>
+      {route === 'PRE_IPO' && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <label className="text-sm">Entry valuation ₹ cr (post-money)<input className="input mt-1" value={ev} onChange={e => setEv(e.target.value)} inputMode="decimal" /></label>
+          <label className="text-sm">Latest round valuation ₹ cr<input className="input mt-1" value={lr} onChange={e => setLr(e.target.value)} inputMode="decimal" /></label>
+          <label className="text-sm">Latest round date<input className="input mt-1" type="date" value={lrd} onChange={e => setLrd(e.target.value)} /></label>
+        </div>
+      )}
+      {!!preview.marks.length && (n(c) || n(ev)) && (
+        <div className="text-sm ink2 flex flex-wrap gap-x-6 gap-y-1">{preview.marks.map(m => <span key={m.label}>{m.label}: <b>{m.multiple != null ? `${m.multiple.toFixed(2)}x` : '—'}</b>{m.cagr != null && <span className="muted"> ({pct(m.cagr)} p.a.)</span>}</span>)}</div>
+      )}
+      <div className="flex gap-2 flex-wrap items-center">
+        <button className="btn btn-primary" onClick={save}>Save</button>
+        {cur && <button className="btn" onClick={() => { setPf({ ...pf, holdings: pf.holdings.filter(x => x.company_id !== id) }); onDone() }}>Remove</button>}
+        <button className="btn" onClick={onDone}>Cancel</button>
+        {err && <span className="neg text-sm">{err}</span>}
+      </div>
+      <p className="muted text-xs">Stored only in this browser (never on GitHub). Portfolio → Export moves it to another device. Per-share comparisons ignore later splits/bonuses; valuation comparisons use the company's market cap.</p>
     </div>
   )
 }
+
+

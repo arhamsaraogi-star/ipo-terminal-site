@@ -57,7 +57,7 @@ def compute(b: CompanyBundle, rules: list[dict] | None = None) -> list[dict]:
         if o["type"] != "IPO":
             continue
         f = o["facts"]
-        post = f.get("post_issue_shares")
+        post = f.get("post_issue_shares") or f.get("shares_outstanding")
         for cat, metric in CATEGORY_SHARE_METRIC.items():
             sf = f.get(metric)
             if not sf or sf.get("status") != "ok":
@@ -86,7 +86,7 @@ def compute(b: CompanyBundle, rules: list[dict] | None = None) -> list[dict]:
                 if post and post.get("status") == "ok" and post["value"]:
                     tranche["pct_post_issue"] = _calc_fact(
                         f"{tid}:pct", "lockin_pct_post_issue", round(100 * shares / post["value"], 2), "%",
-                        "lockin_shares / post_issue_shares", [f"{tid}:shares", post["fact_id"]])
+                        "lockin_shares / shares outstanding", [f"{tid}:shares", post["fact_id"]])
                 out.append(tranche)
     return sorted(out, key=lambda t: t["expiry_date"])
 

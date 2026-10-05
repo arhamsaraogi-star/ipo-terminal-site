@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useVault, go } from '../App'
 import { Card, PageHead, Seg, Stage, Table } from '../components/ui'
-import { eventDate, ipo, isHeld, isWatched, issueSize, priceBand } from '../lib/derive'
+import { eventDate, ipo, isHeld, isWatched, issueSize, lastActivity, priceBand } from '../lib/derive'
+import { dealSize } from './AnchorDesk'
 import { STAGE, crore, fmtDate } from '../lib/format'
 
 type Seg_ = 'ALL' | 'MAINBOARD' | 'SME'
@@ -30,23 +31,24 @@ export default function Pipeline({ mode }: { mode: 'all' | 'upcoming' }) {
             <option value="ALL">All stages</option>
             {Object.entries(STAGE).filter(([k]) => k !== 'PRIVATE').map(([k, s]) => <option key={k} value={k}>{s.label}</option>)}
           </select>
-          <select className="input !h-9 !w-auto" value={sector} onChange={e => setSector(e.target.value)} aria-label="Sector">
+          {sectors.length > 1 && <select className="input !h-9 !w-auto" value={sector} onChange={e => setSector(e.target.value)} aria-label="Sector">
             <option value="ALL">All sectors</option>{sectors.map(s => <option key={s}>{s}</option>)}
-          </select>
+          </select>}
         </div>} title={`${rows.length} companies`}>
-        <Table rows={rows} onRow={r => go(`/company/${r.company.company_id}`)} initialSort={{ key: 'stage', dir: -1 }} cols={[
+        <Table rows={rows} onRow={r => go(`/company/${r.company.company_id}`)} initialSort={{ key: 'act', dir: -1 }}
+          search={r => `${r.company.name} ${r.company.identifiers.nse_symbol ?? ''} ${(ipo(r)?.intermediaries?.brlms ?? []).join(' ')} ${r.company.drhp_status ?? ''}`} cols={[
           { key: 'c', label: 'Company', sort: r => r.company.name, render: r => <div className="flex items-center gap-2">
             {isHeld(v, r.company.company_id) && <span title="In portfolio" style={{ color: '#f5a623' }}>★</span>}
             {!isHeld(v, r.company.company_id) && isWatched(v, r.company.company_id) && <span title="Watching" className="muted">☆</span>}
             <div><b>{r.company.name}</b><div className="muted text-xs">{r.company.segment === 'SME' ? 'SME' : r.company.segment === 'MAINBOARD' ? 'Mainboard' : ''}{r.company.identifiers.nse_symbol ? ` · ${r.company.identifiers.nse_symbol}` : ''}{r.company.drhp_status ? ` · ${r.company.drhp_status}` : ''}</div></div></div> },
           { key: 'stage', label: 'Stage', sort: r => STAGE[r.company.lifecycle].rank, render: r => <Stage s={r.company.lifecycle} /> },
-          { key: 'sec', label: 'Sector', sort: r => r.company.sector ?? '', render: r => r.company.sector ?? '—' },
-          { key: 'sz', label: 'Issue size', right: true, sort: r => issueSize(r), render: r => crore(issueSize(r)) },
+          { key: 'act', label: 'Last activity', right: true, sort: r => lastActivity(r), render: r => fmtDate(lastActivity(r) === '0000' ? null : lastActivity(r), false) },
+          { key: 'sz', label: 'Size', right: true, sort: r => issueSize(r), render: r => issueSize(r) != null ? crore(issueSize(r)) : <span className="muted">{dealSize(r).text}</span> },
           { key: 'pb', label: 'Price band', right: true, render: r => priceBand(r) },
           { key: 'sub', label: 'Subs.', right: true, sort: r => ipo(r)?.subscription?.total_times ?? null, render: r => { const x = ipo(r)?.subscription?.total_times; return x == null ? '—' : `${x.toFixed(1)}x` } },
-          ...(['DRHP_FILED', 'RHP_FILED', 'ANCHOR_BIDDING', 'ISSUE_OPEN', 'LISTING'] as const).map(t => ({
+          ...(['DRHP_FILED', 'RHP_FILED', 'ISSUE_OPEN', 'LISTING'] as const).map(t => ({
             key: t, label: { DRHP_FILED: 'DRHP', RHP_FILED: 'RHP', ANCHOR_BIDDING: 'Anchor', ISSUE_OPEN: 'Opens', LISTING: 'Listing' }[t],
-            right: true, sort: (r: typeof rows[number]) => eventDate(r, t), render: (r: typeof rows[number]) => fmtDate(eventDate(r, t), false),
+            right: true, hideMobile: true, sort: (r: typeof rows[number]) => eventDate(r, t), render: (r: typeof rows[number]) => fmtDate(eventDate(r, t), false),
           })),
         ]} />
       </Card>

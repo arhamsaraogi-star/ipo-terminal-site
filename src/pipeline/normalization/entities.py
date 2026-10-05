@@ -7,13 +7,25 @@ import unicodedata
 SUFFIX = re.compile(r"\b(the|limited|ltd|private|pvt|company|co|india|incorporated|inc)\b\.?", re.I)
 
 
+STOP = {"the", "limited", "ltd", "private", "pvt", "company", "co", "india", "indian", "incorporated", "inc", "and", "of", "corp", "corporation"}
+
+
+def _stem(tok: str) -> str:
+    if len(tok) > 4 and tok.endswith("ies"):
+        return tok[:-3] + "y"
+    if len(tok) > 3 and tok.endswith("s") and not tok.endswith("ss"):
+        return tok[:-1]
+    return tok
+
+
 def norm(name: str) -> str:
-    """Matching key: 'Shah Investor's Home Limited' -> 'shahinvestorshome'."""
+    """Matching key, robust to punctuation, suffixes, '(India)', plurals and spacing:
+    'A-One Steels India Limited' == 'A One Steel Limited' -> 'aonesteel'."""
     s = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().lower()
-    s = s.replace("&", " and ")
+    s = s.replace("&", " and ").replace("'", "")
     s = re.sub(r"\(.*?\)", " ", s)
-    s = SUFFIX.sub(" ", s)
-    return re.sub(r"[^a-z0-9]", "", s)
+    toks = [_stem(t) for t in re.split(r"[^a-z0-9]+", s) if t and t not in STOP]
+    return "".join(toks)
 
 
 def slug(name: str) -> str:

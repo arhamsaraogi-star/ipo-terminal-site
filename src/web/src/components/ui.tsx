@@ -74,38 +74,60 @@ export function FactValue({ f, children }: { f?: Fact | null; children?: ReactNo
   )
 }
 
-export interface Col<T> { key: string; label: ReactNode; render: (r: T) => ReactNode; sort?: (r: T) => number | string | null; right?: boolean }
+export interface Col<T> { key: string; label: ReactNode; render: (r: T) => ReactNode; sort?: (r: T) => number | string | null; right?: boolean; hideMobile?: boolean; primary?: boolean }
 
-export function Table<T>({ rows, cols, onRow, empty = 'Nothing here yet', initialSort }: {
+/** Sortable table. On phones it reflows into cards (labels come from the column headers). */
+export function Table<T>({ rows, cols, onRow, empty = 'Nothing here yet', initialSort, search, pageSize = 60 }: {
   rows: T[]; cols: Col<T>[]; onRow?: (r: T) => void; empty?: string; initialSort?: { key: string; dir: 1 | -1 }
+  search?: (r: T) => string; pageSize?: number
 }) {
   const [sort, setSort] = useState(initialSort)
+  const [q, setQ] = useState('')
+  const [limit, setLimit] = useState(pageSize)
+  const filtered = useMemo(() => {
+    if (!search || !q.trim()) return rows
+    const needle = q.toLowerCase().split(/\s+/).filter(Boolean)
+    return rows.filter(r => { const h = search(r).toLowerCase(); return needle.every(n => h.includes(n)) })
+  }, [rows, q, search])
   const sorted = useMemo(() => {
     const c = cols.find(c => c.key === sort?.key)
-    if (!c?.sort || !sort) return rows
-    return [...rows].sort((a, b) => {
+    if (!c?.sort || !sort) return filtered
+    return [...filtered].sort((a, b) => {
       const x = c.sort!(a), y = c.sort!(b)
-      if (x == null) return 1
-      if (y == null) return -1
+      if (x == null || x === '') return 1
+      if (y == null || y === '') return -1
       return (x < y ? -1 : x > y ? 1 : 0) * sort.dir
     })
-  }, [rows, cols, sort])
-  if (!rows.length) return <div className="muted py-6 text-center">{empty}</div>
+  }, [filtered, cols, sort])
+  const textOf = (n: ReactNode) => (typeof n === 'string' ? n : '')
   return (
-    <div className="overflow-x-auto -mx-2">
-      <table className="tbl">
-        <thead><tr>{cols.map(c => (
-          <th key={c.key} className={c.right ? 'r' : ''} data-sort={c.sort ? '' : undefined}
-            onClick={() => c.sort && setSort(s => ({ key: c.key, dir: s?.key === c.key ? (s.dir === 1 ? -1 : 1) : 1 }))}>
-            {c.label}{sort?.key === c.key ? (sort.dir === 1 ? ' ↑' : ' ↓') : ''}
-          </th>))}</tr></thead>
-        <tbody>{sorted.map((r, i) => (
-          <tr key={i} className={onRow ? 'row-link' : ''} onClick={() => onRow?.(r)}>
-            {cols.map(c => <td key={c.key} className={c.right ? 'r' : ''}>{c.render(r)}</td>)}
-          </tr>))}</tbody>
-      </table>
+    <div>
+      {search && (
+        <input className="input mb-3 !h-10" placeholder={`Filter ${rows.length} rows…`} value={q} onChange={e => { setQ(e.target.value); setLimit(pageSize) }} />
+      )}
+      {!sorted.length ? <div className="muted py-6 text-center">{q ? 'No matches' : empty}</div> : (
+        <div className="tbl-wrap">
+          <table className="tbl">
+            <thead><tr>{cols.map(c => (
+              <th key={c.key} className={c.right ? 'r' : ''} data-sort={c.sort ? '' : undefined}
+                onClick={() => c.sort && setSort(s => ({ key: c.key, dir: s?.key === c.key ? (s.dir === 1 ? -1 : 1) : (c.right ? -1 : 1) }))}>
+                {c.label}{sort?.key === c.key ? (sort.dir === 1 ? ' ↑' : ' ↓') : ''}
+              </th>))}</tr></thead>
+            <tbody>{sorted.slice(0, limit).map((r, i) => (
+              <tr key={i} className={onRow ? 'row-link' : ''} onClick={() => onRow?.(r)}>
+                {cols.map((c, ci) => <td key={c.key} data-label={textOf(c.label)} className={`${c.right ? 'r' : ''} ${c.hideMobile ? 'hide-m' : ''} ${c.primary || ci === 0 ? 'td-primary' : ''}`}>{c.render(r)}</td>)}
+              </tr>))}</tbody>
+          </table>
+          {sorted.length > limit && <button className="btn mt-3" onClick={() => setLimit(l => l + pageSize * 2)}>Show more ({sorted.length - limit} left)</button>}
+        </div>
+      )}
     </div>
   )
+}
+
+export function Delta({ v, d = 1, suffix = '%' }: { v: number | null | undefined; d?: number; suffix?: string }) {
+  if (v == null || !isFinite(v)) return <span className="muted">—</span>
+  return <span className={v > 0 ? 'pos' : v < 0 ? 'neg' : ''}>{v > 0 ? '+' : ''}{v.toFixed(d)}{suffix}</span>
 }
 
 export function Seg<T extends string>({ value, options, onChange }: { value: T; options: { v: T; label: string }[]; onChange: (v: T) => void }) {

@@ -21,6 +21,7 @@ from pipeline.ingestion.http import Client, SourceError
 from pipeline.ingestion import nse as N
 from pipeline.ingestion.sebi import SEBI
 from pipeline.normalization.entities import Resolver, norm, pretty
+from pipeline.normalization.merge import merge_duplicates
 
 VERSION = "ingest-0.2"
 TODAY = date.today()
@@ -88,6 +89,16 @@ class State:
             cid = b.company["company_id"]
             self.bundles[cid] = b
             self.before[cid] = snapshot(b)
+            ids = b.company["identifiers"]
+            self.res.add(cid, [b.company["name"], b.company.get("legal_name") or "", *b.company.get("aliases", [])],
+                         ids.get("isin"), ids.get("nse_symbol"))
+            if ids.get("pan"):
+                self.res.by_key["p:" + ids["pan"]] = cid
+
+    def reindex(self) -> None:
+        """Rebuild the resolver (after merges) so no key points at a removed record."""
+        self.res = Resolver()
+        for cid, b in self.bundles.items():
             ids = b.company["identifiers"]
             self.res.add(cid, [b.company["name"], b.company.get("legal_name") or "", *b.company.get("aliases", [])],
                          ids.get("isin"), ids.get("nse_symbol"))
@@ -179,7 +190,8 @@ def upsert_doc(b: CompanyBundle, doc_type: str, url: str, filing_date: str | Non
 
 
 # ───────────────────────── adapters → state ─────────────────────────
-def ingest_offerdocs(st: State, nse: N.NSE, since: date) -> None:
+def ingest_offerdocs(st: State, nse: N.NSE, since: date, drhp_since: date | None = None) -> None:
+    drhp_since = drhp_since or since
     for index, segment in (("equities", "MAINBOARD"), ("sme", "SME")):
         try:
             rows = nse._get(f"corporates/offerdocs?index={index}") or []
@@ -189,7 +201,8 @@ def ingest_offerdocs(st: State, nse: N.NSE, since: date) -> None:
         n = 0
         for r in rows:
             dates = {k: ddate(r.get(k)) for k in ("drhpDate", "rhpDate", "fpDate", "advDate")}
-            if not any(d and d >= since.isoformat() for d in dates.values()):
+            live = (r.get("drhpStatus") or "").lower() in ("under process", "approved") and dates["drhpDate"] and dates["drhpDate"] >= drhp_since.isoformat()
+            if not live and not any(d and d >= since.isoformat() for d in dates.values()):
                 continue
             name = (r.get("company") or "").strip()
             if not name:
@@ -215,13 +228,13 @@ def ingest_offerdocs(st: State, nse: N.NSE, since: date) -> None:
         st.log.append(f"NSE offer-document register ({index}): {n} companies in window")
 
 
-def ingest_sebi(st: State, sebi: SEBI, since: date, pdf_budget: int) -> None:
+def ingest_sebi(st: State, sebi: SEBI, since: date, pdf_budget: int, drhp_since: date | None = None) -> None:
     kind_map = {"DRHP": ("DRHP", "DRHP_FILED"), "UDRHP": ("UDRHP", "UDRHP_FILED"), "RHP": ("RHP", "RHP_FILED"),
                 "PROSPECTUS": ("PROSPECTUS", "PROSPECTUS_FILED"), "ADDENDUM": ("ADDENDUM", "DOCUMENT_REVISED"),
                 "CORRIGENDUM": ("CORRIGENDUM", "DOCUMENT_REVISED")}
     for lst in ("DRHP", "RHP", "PROSPECTUS"):
         try:
-            rows = sebi.filings(lst, since)
+            rows = sebi.filings(lst, (drhp_since or since) if lst == "DRHP" else since)
         except SourceError as e:
             st.failures.append(f"SEBI {lst}: {e}")
             continue
@@ -431,6 +444,58 @@ def ingest_news(st: State, nse: N.NSE, max_companies: int) -> None:
     st.log.append(f"NSE announcements: {min(len(listed), max_companies)} listed companies checked, {n_new} new items")
 
 
+# ───────────────────────── exchange equity lists + market data ─────────────────────────
+def enrich_from_equity_lists(st: State, client: Client, since: date) -> None:
+    """ISIN / symbol / listing date for companies we already track (matched by symbol or normalised name)."""
+    from pipeline.ingestion import market as M
+    try:
+        lists = M.fetch_equity_lists(client)
+    except Exception as e:  # noqa: BLE001
+        st.failures.append(f"NSE equity lists: {e}")
+        return
+    by_norm: dict[str, list[str]] = {}
+    for sym, r in lists.items():
+        if r.get("listed_on") and r["listed_on"] >= since.isoformat():
+            by_norm.setdefault(norm(r["name"]), []).append(sym)
+    n = 0
+    for b in st.bundles.values():
+        ids = b.company["identifiers"]
+        sym = ids.get("nse_symbol")
+        rec = lists.get(sym) if sym else None
+        if not rec:
+            cands = by_norm.get(norm(b.company["name"]), [])
+            if len(cands) == 1:
+                sym, rec = cands[0], lists[cands[0]]
+        if not rec:
+            continue
+        if not ids.get("nse_symbol"):
+            ids["nse_symbol"] = sym
+        if rec.get("isin") and re.match(r"^INE[A-Z0-9]{9}$", rec["isin"]) and not ids.get("isin"):
+            ids["isin"] = rec["isin"]
+        if b.company.get("segment") == "UNKNOWN":
+            b.company["segment"] = rec["segment"]
+        if rec.get("listed_on") and rec["listed_on"] >= since.isoformat() and rec["listed_on"] <= TODAY.isoformat():
+            upsert_event(b, "LISTING", rec["listed_on"], "actual", src("EXCHANGE_ISSUE_PAGE", "https://www.nseindia.com/market-data/securities-available-for-trading"))
+        n += 1
+    st.log.append(f"NSE equity lists: {len(lists)} securities, {n} tracked companies enriched")
+
+
+def update_market(st: State, client: Client) -> None:
+    from pipeline.ingestion import market as M
+    symbols, listing = {}, {}
+    for cid, b in st.bundles.items():
+        sym = b.company["identifiers"].get("nse_symbol")
+        lds = [e["date"] for e in b.events if e["event_type"] == "LISTING" and e["date_kind"] == "actual"]
+        ld = min(lds) if lds else None
+        if sym and ld:
+            symbols[sym] = cid
+            listing[sym] = ld
+    try:
+        M.update(client, symbols, listing, budget_ok=lambda: not out_of_time(0.55), log=st.log.append)
+    except Exception as e:  # noqa: BLE001
+        st.failures.append(f"Market data: {e}")
+
+
 # ───────────────────────── lifecycle, changes ─────────────────────────
 def lifecycle(b: CompanyBundle) -> str:
     if b.company["lifecycle"] == "WITHDRAWN" and not any(e["event_type"] == "ISSUE_OPEN" for e in b.events):
@@ -486,8 +551,9 @@ def diff_changes(st: State) -> list[dict]:
         new = snapshot(b)
         old = st.before.get(cid)
         if old is None:
-            if not st.backfill:
-                out.append({"change_id": f"{cid}:{ts}:new", "company_id": cid, "field": "company", "label": "New company tracked",
+            filed = max([e["date"] for e in b.events if e["date_kind"] == "actual"] or ["0000"])
+            if not st.backfill and filed >= (TODAY - timedelta(days=3)).isoformat():
+                out.append({"change_id": f"{cid}:{ts}:new", "company_id": cid, "field": "company", "label": "New filing / new company",
                             "old": None, "new": b.company["lifecycle"], "source": None, "detected_at": ts})
             continue
         for k, v in new.items():
@@ -517,21 +583,31 @@ def remove_samples() -> int:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--days", type=int, default=183)
+    ap.add_argument("--days", type=int, default=365, help="window for issues / RHP / prospectus")
+    ap.add_argument("--drhp-days", type=int, default=450, help="window for DRHPs still in the pipeline")
     ap.add_argument("--backfill", action="store_true")
     ap.add_argument("--detail-budget", type=int, default=250)
     ap.add_argument("--pdf-budget", type=int, default=400)
     ap.add_argument("--news-companies", type=int, default=250)
     ap.add_argument("--cover-budget", type=int, default=40, help="offer documents to download + extract per run")
     ap.add_argument("--max-minutes", type=float, default=45, help="hard time budget; slow phases stop early and resume next run")
-    ap.add_argument("--skip", default="", help="comma list: sebi,offerdocs,issues,covers,news")
+    ap.add_argument("--skip", default="", help="comma list: sebi,offerdocs,issues,market,covers,news")
     a = ap.parse_args(argv)
     skip = set(filter(None, a.skip.split(",")))
     BUDGET[0] = a.max_minutes * 60
     since = TODAY - timedelta(days=a.days)
+    drhp_since = TODAY - timedelta(days=max(a.drhp_days, a.days))
 
     removed = remove_samples()
     st = State(a.backfill)
+    pre = merge_duplicates(st.bundles)
+    if pre:
+        st.log.append(f"Merged {len(pre)} duplicate records already in the database")
+        redirects = read_json(DATA / "index" / "redirects.json", {})
+        redirects.update({gone: keep for keep, gone in pre})
+        write_json(DATA / "index" / "redirects.json", redirects)
+        st.reindex()
+        st.before = {cid: snapshot(b) for cid, b in st.bundles.items()}
     client = Client()
     nse, sebi = N.NSE(client), SEBI(client)
     holidays: set[str] = set()
@@ -544,19 +620,35 @@ def main(argv=None) -> int:
 
     if "offerdocs" not in skip:
         print('▶ ingest_offerdocs', flush=True)
-        ingest_offerdocs(st, nse, since)
+        ingest_offerdocs(st, nse, since, drhp_since)
     if "sebi" not in skip:
         print('▶ ingest_sebi', flush=True)
-        ingest_sebi(st, sebi, since, a.pdf_budget)
+        ingest_sebi(st, sebi, since, a.pdf_budget, drhp_since)
     if "issues" not in skip:
         print('▶ ingest_issues', flush=True)
         ingest_issues(st, nse, since, cal, a.detail_budget)
+    enrich_from_equity_lists(st, client, since)
+    merged = merge_duplicates(st.bundles)
+    if merged:
+        st.log.append(f"Merged {len(merged)} duplicate company records")
+        redirects = read_json(DATA / "index" / "redirects.json", {})
+        for keep, gone in merged:
+            redirects[gone] = keep
+        for k, v in list(redirects.items()):  # collapse chains
+            while v in redirects and redirects[v] != v:
+                v = redirects[v]
+            redirects[k] = v
+        write_json(DATA / "index" / "redirects.json", redirects)
+        st.reindex()
     for b in st.bundles.values():
         b.company["lifecycle"] = lifecycle(b)
         save_company(b)  # checkpoint: discovery is never lost if a later phase times out
+    if "market" not in skip:
+        print('▶ market', flush=True)
+        update_market(st, client)
     if "covers" not in skip:
-        print('▶ extract_covers', flush=True)
-        extract_covers(st, client, a.cover_budget)
+        print('▶ extract_documents', flush=True)
+        extract_documents(st, client, a.cover_budget)
     if "news" not in skip:
         print('▶ ingest_news', flush=True)
         ingest_news(st, nse, a.news_companies)
@@ -597,22 +689,42 @@ def download(client: Client, url: str) -> bytes:
     raise SourceError(f"{url}: truncated download ({len(blob)} of {want} bytes)")
 
 
-def extract_covers(st: State, client: Client, budget: int, minutes: float = 25) -> None:
+DOC_VERSION = "doc/2"
+DOC_ORDER = {"PROSPECTUS": 0, "RHP": 1, "UDRHP": 2, "DRHP": 3}
+
+
+def best_document(b: CompanyBundle) -> dict | None:
+    """Most advanced readable offer document: Prospectus > RHP > UDRHP > DRHP; newest within a type."""
+    docs = [d for d in b.documents if d["doc_type"] in DOC_ORDER and re.search(r"\.(pdf|zip)$", d["url"], re.I)
+            and (d.get("extraction") or {}).get("status") != "failed_permanent"]
+    if not docs:
+        return None
+    return min(docs, key=lambda d: (DOC_ORDER[d["doc_type"]], -int((d.get("filing_date") or "0000-00-00").replace("-", ""))))
+
+
+def extract_documents(st: State, client: Client, budget: int, minutes: float = 30) -> None:
+    """Download the best offer document per company and extract cover + body (financials, KPIs, peers, industry).
+    Re-runs when a newer document type arrives (DRHP -> RHP -> Prospectus) or the extractor version changes."""
     import gzip
     import time
-    deadline = time.monotonic() + minutes * 60
     from pipeline.extraction import drhp_cover as X
+    from pipeline.extraction import offer_doc as OD
+    deadline = time.monotonic() + minutes * 60
     done = failed = 0
-    order = {"RHP": 0, "UDRHP": 1, "DRHP": 2, "PROSPECTUS": 3}
     queue = []
     for b in st.bundles.values():
-        docs = [d for d in b.documents if d["doc_type"] in order and re.search(r"\.(pdf|zip)$", d["url"], re.I)
-                and not (d.get("extraction") or {}).get("status") in ("ok", "failed_permanent")]
-        if docs:
-            # newest filing first: that is the one an anchor desk needs today
-            queue.append((max(d.get("filing_date") or "" for d in docs), b, sorted(docs, key=lambda d: (order[d["doc_type"]], d.get("filing_date") or ""))[0]))
-    queue.sort(key=lambda x: x[0], reverse=True)
-    for _, b, d in queue[:budget]:
+        d = best_document(b)
+        if not d:
+            continue
+        ex = d.get("extraction") or {}
+        if ex.get("status") == "ok" and ex.get("extractor") == DOC_VERSION:
+            continue
+        stage = b.company["lifecycle"]
+        filed = max([e["date"] for e in b.events if e["event_type"] in ("DRHP_FILED", "UDRHP_FILED", "RHP_FILED", "PROSPECTUS_FILED")] or ["0000"])
+        urgent = stage in ("ISSUE_OPEN", "ISSUE_ANNOUNCED", "ISSUE_CLOSED", "RHP_FILED", "LISTED") or (TODAY - date.fromisoformat(filed)).days <= 14 if filed != "0000" else False
+        queue.append((0 if urgent else 1, "".join(chr(255 - ord(c)) for c in filed), b, d))
+    queue.sort(key=lambda x: (x[0], x[1]))
+    for _, _, b, d in queue[:budget]:
         if time.monotonic() > deadline or out_of_time(0.8):
             break
         try:
@@ -623,21 +735,56 @@ def extract_covers(st: State, client: Client, budget: int, minutes: float = 25) 
             pages, n = X.cover_pages(pdf)
             sha = hashlib.sha256(pdf).hexdigest()
             e = X.extract(pages)
-        except Exception as ex:  # noqa: BLE001 — any parser failure is recorded, never fatal
+            body = OD.extract(pdf)
+        except Exception as exn:  # noqa: BLE001 — any parser failure is recorded, never fatal
             tries = (d.get("extraction") or {}).get("tries", 0) + 1
             d["extraction"] = {"status": "failed_permanent" if tries >= 3 else "failed", "tries": tries,
-                               "error": str(ex)[:200], "extracted_at": now_ist()}
+                               "error": str(exn)[:200], "extracted_at": now_ist()}
             failed += 1
             continue
         d.update({"sha256": sha, "pages": n, "downloaded_at": now_ist(), "size_bytes": len(pdf)})
         tdir = DATA / "text" / sha[:16]
         tdir.mkdir(parents=True, exist_ok=True)
-        for i, p in enumerate(pages, 1):
-            (tdir / f"p{i:03d}.txt.gz").write_bytes(gzip.compress(p.encode("utf-8"), mtime=0))
+        for k, p in enumerate(pages, 1):
+            (tdir / f"p{k:03d}.txt.gz").write_bytes(gzip.compress(p.encode("utf-8"), mtime=0))
         apply_cover(b, d, e, sha)
-        d["extraction"] = {"status": "ok", "extracted_at": now_ist(), "garbled": e["garbled"], "extractor": "drhp_cover/1"}
+        apply_body(b, d, body, sha)
+        d["extraction"] = {"status": "ok", "extracted_at": now_ist(), "garbled": e["garbled"], "extractor": DOC_VERSION,
+                           "financial_values": len(body.financials), "peers": len(body.peers), "industry_claims": len(body.industry)}
         done += 1
-    st.log.append(f"Offer-document covers: {done} extracted, {failed} failed, {max(0, len(queue) - budget)} queued for next run")
+    left = max(0, len(queue) - done - failed)
+    st.log.append(f"Offer documents: {done} read (cover + financials + peers + industry), {failed} failed, {left} queued for next runs")
+
+
+def apply_body(b: CompanyBundle, d: dict, r, sha: str) -> None:
+    from pipeline.extraction.offer_doc import LABELS as FL
+    cid = b.company["company_id"]
+    st_type = d["doc_type"]
+    fin = []
+    for v in r.financials:
+        s_ = src(st_type, d["url"], page=v.page, table=v.table or None, doc_id=d["document_id"])
+        s_["sha256"] = sha
+        fin.append({"fact_id": f"{cid}:{v.metric}:{v.period}", "metric": v.metric, "label": FL.get(v.metric, v.metric),
+                    "value": v.value, "unit": v.unit, "period": v.period, "basis": f"restated ({st_type.lower()})",
+                    "kind": "reported", "formula": None, "inputs": [], "source": s_, "extraction": ext("pdf:table"),
+                    "status": "ok", "note": f"as printed: {v.raw}", "supersedes": None})
+    facts = b.facts or {"company_id": cid, "financials": [], "industry": [], "operating": []}
+    if fin or not facts.get("financials"):
+        facts["financials"] = fin
+    s_peer = src(st_type, d["url"], page=r.peers_page, table="Comparison with listed industry peers", doc_id=d["document_id"])
+    facts["peers"] = [{**p, "source": s_peer} for p in r.peers] if r.peers else facts.get("peers", [])
+    claims = []
+    for c in r.industry:
+        s_ = src(st_type, d["url"], page=c["page"], table="Industry overview", doc_id=d["document_id"])
+        claims.append({**c, "source": s_})
+    facts["industry_claims"] = claims or facts.get("industry_claims", [])
+    facts["source_document"] = d["document_id"]
+    b.facts = facts
+    if r.pre_issue_shares:
+        o = offering(b)
+        s_ = src(st_type, d["url"], page=r.pre_issue_page, table="Capital structure", doc_id=d["document_id"])
+        o["facts"]["pre_issue_shares"] = fact(o["offering_id"], "pre_issue_shares", r.pre_issue_shares, "shares",
+                                              "Pre-issue shares (capital structure)", s_, method="regex:capital_structure")
 
 
 def apply_cover(b: CompanyBundle, d: dict, e: dict, sha: str) -> None:

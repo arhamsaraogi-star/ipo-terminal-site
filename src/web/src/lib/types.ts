@@ -48,15 +48,29 @@ export interface Change {
   change_id: string; company_id: string; field: string; label?: string | null; old: unknown; new: unknown
   source?: Source | null; detected_at: string
 }
-export interface Holding { company_id: string; quantity: number; avg_cost: number; acquired_on: string; route: string; note?: string | null }
+export interface Holding {
+  company_id: string; quantity: number; avg_cost: number; acquired_on: string; route: string; note?: string | null
+  entry_valuation_cr?: number | null          // pre-IPO: post-money valuation at which we invested
+  invested_cr?: number | null                 // pre-IPO: amount invested (when quantity/price unknown)
+  latest_round_cr?: number | null             // latest private round valuation (manual)
+  latest_round_on?: string | null
+}
+export interface Peer { name: string; face_value?: number | null; price?: number | null; total_income?: number | null; mcap?: number | null
+  pb?: number | null; pe?: number | null; eps_basic?: number | null; ronw?: number | null; nav?: number | null; source?: Source }
+export interface IndustryClaim { text: string; page: number; cagr_pct?: number | null; amounts?: { value: number; unit: string }[]; years?: string[]; source?: Source }
+export interface Quote { date: string; close: number; prev_close?: number | null; open?: number | null; high?: number | null; low?: number | null
+  shares?: number | null; mcap_cr?: number | null; series?: string; volume?: number | null }
+export interface Market { symbol: string; quote?: Quote | null; listing?: { date: string; open?: number | null; high?: number | null; low?: number | null; close?: number | null; prev_close?: number | null } | null
+  history: [string, number][]; source: string }
 export interface CompanyRecord {
-  company: Company; offerings: Offering[]; facts: { financials: Fact[]; industry: Fact[]; operating?: Fact[] } | null
-  documents: Doc[]; events: Event[]; lockins: Lockin[]; news: News[]
+  company: Company; offerings: Offering[]
+  facts: { financials: Fact[]; industry: Fact[]; operating?: Fact[]; peers?: Peer[]; industry_claims?: IndustryClaim[]; source_document?: string | null } | null
+  documents: Doc[]; events: Event[]; lockins: Lockin[]; news: News[]; market?: Market | null
 }
 export interface Vault {
   meta: { built_at: string; schema_version: number; companies: number; has_sample: boolean; repo?: string | null
     ingest?: { ran_at: string; companies: number; changes: number; log: string[]; failures: string[] } | null }
   event_types: Record<string, { label: string; group: string; order: number }>
   companies: CompanyRecord[]; changes: Change[]
-  portfolio: { holdings: Holding[]; watchlist: string[] }; review: string[]
+  portfolio: { holdings: Holding[]; watchlist: string[] }; review: string[]; redirects?: Record<string, string>
 }

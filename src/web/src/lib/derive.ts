@@ -1,5 +1,5 @@
 // Pure selectors over the vault. No research content lives in components — only here and in data/.
-import { daysUntil, fv, fyYear, isoToday } from './format'
+import { daysUntil, fv, isoToday } from './format'
 import type { CompanyRecord, Event, Fact, Lockin, Vault } from './types'
 
 export const ipo = (r: CompanyRecord) => r.offerings.find(o => o.type === 'IPO')
@@ -39,10 +39,21 @@ export function allLockins(v: Vault) {
     .sort((a, b) => a.l.expiry_date.localeCompare(b.l.expiry_date))
 }
 
-/** Financial facts pivoted: metric -> period -> Fact (restated consolidated preferred). */
+/** Chronological period order: FY2024 < FY2025 < Sep-2025 (stub) < FY2026 ... */
+const MON: Record<string, number> = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 }
+export function periodKey(p: string): number {
+  const fy = p.match(/^FY(\d{4})$/)
+  if (fy) return Number(fy[1]) * 100 + 3
+  const m = p.match(/^([A-Z][a-z]{2})-(\d{4})$/)
+  if (m) return Number(m[2]) * 100 + (MON[m[1]] ?? 0)
+  return 0
+}
+export const isStub = (p: string) => !/^FY\d{4}$/.test(p)
+
+/** Financial facts pivoted: metric -> period -> Fact. Periods oldest → newest. */
 export function finTable(r: CompanyRecord) {
   const facts = r.facts?.financials ?? []
-  const periods = [...new Set(facts.map(f => f.period).filter(Boolean) as string[])].sort()
+  const periods = [...new Set(facts.map(f => f.period).filter(Boolean) as string[])].sort((a, b) => periodKey(a) - periodKey(b))
   const byMetric = new Map<string, Map<string, Fact>>()
   for (const f of facts) {
     if (!f.period) continue
@@ -52,28 +63,92 @@ export function finTable(r: CompanyRecord) {
   return { periods, byMetric }
 }
 
+/** Latest FULL financial year value (stub periods are not annual, so they are skipped). */
 export function latest(r: CompanyRecord, metric: string): Fact | undefined {
-  return (r.facts?.financials ?? []).filter(f => f.metric === metric && f.period)
-    .sort((a, b) => (fyYear(b.period) ?? 0) - (fyYear(a.period) ?? 0))[0]
+  return (r.facts?.financials ?? []).filter(f => f.metric === metric && f.period && !isStub(f.period) && f.status === 'ok')
+    .sort((a, b) => periodKey(b.period!) - periodKey(a.period!))[0]
 }
 
-/** Implied valuation inputs at the upper band / issue price. All results are CALCULATED, with the formula shown. */
-export function valuationInputs(r: CompanyRecord) {
+// ───────── market ─────────
+export const quote = (r: CompanyRecord) => r.market?.quote ?? null
+export const cmp = (r: CompanyRecord) => quote(r)?.close ?? null
+export const dayChangePct = (r: CompanyRecord) => { const q = quote(r); return q?.close && q.prev_close ? (q.close / q.prev_close - 1) * 100 : null }
+export const listingOpen = (r: CompanyRecord) => r.market?.listing?.open ?? null
+export function listingGainPct(r: CompanyRecord) {
+  const ip = issuePrice(r), lo = listingOpen(r)
+  return ip && lo ? (lo / ip - 1) * 100 : null
+}
+export function returnVsIssuePct(r: CompanyRecord) {
+  const ip = issuePrice(r), c = cmp(r)
+  return ip && c ? (c / ip - 1) * 100 : null
+}
+/** Share count: exchange shares outstanding (listed) > post-issue (doc) > pre-issue + fresh shares at the upper band. */
+export function shareCount(r: CompanyRecord): { value: number | null; basis: string } {
   const f = ipo(r)?.facts ?? {}
-  const price = issuePrice(r)
-  const post = fv(f.post_issue_shares)
-  const mcap = price != null && post != null ? (price * post) / 1e7 : null
-  const pat = fv(latest(r, 'pat')), ebitda = fv(latest(r, 'ebitda')), rev = fv(latest(r, 'revenue_from_operations'))
-  const debt = fv(latest(r, 'total_debt')), cash = fv(latest(r, 'cash')), fresh = fv(f.fresh_issue)
-  const ev = mcap != null && debt != null && cash != null ? mcap + debt - cash - (fresh ?? 0) : null
-  const period = latest(r, 'pat')?.period ?? null
-  return [
-    { label: 'Market cap at issue price', value: mcap, unit: 'INR crore', formula: 'issue price × post-issue shares ÷ 10⁷', meaningful: mcap != null },
-    { label: `P/E (${period ?? 'latest FY'} PAT)`, value: mcap != null && pat ? mcap / pat : null, unit: 'x', formula: 'market cap ÷ PAT', meaningful: pat != null && pat > 0, why: pat != null && pat <= 0 ? 'Loss-making: P/E not meaningful' : undefined },
-    { label: 'Price / Sales', value: mcap != null && rev ? mcap / rev : null, unit: 'x', formula: 'market cap ÷ revenue from operations', meaningful: !!rev },
-    { label: 'Enterprise value (pre-issue net debt)', value: ev, unit: 'INR crore', formula: 'market cap + debt − cash − fresh-issue proceeds', meaningful: ev != null },
-    { label: 'EV / EBITDA', value: ev != null && ebitda ? ev / ebitda : null, unit: 'x', formula: 'EV ÷ EBITDA', meaningful: ebitda != null && ebitda > 0, why: ebitda != null && ebitda <= 0 ? 'Negative EBITDA: not meaningful' : undefined },
-  ]
+  const so = fv(f.shares_outstanding); if (so) return { value: so, basis: 'shares outstanding (NSE)' }
+  const post = fv(f.post_issue_shares); if (post) return { value: post, basis: 'post-issue shares (offer document)' }
+  const pre = fv(f.pre_issue_shares), price = issuePrice(r)
+  const freshSh = fv(f.fresh_issue_shares) ?? fv(f.drhp_fresh_issue_shares) ?? ((fv(f.fresh_issue) ?? fv(f.drhp_fresh_issue)) && price ? ((fv(f.fresh_issue) ?? fv(f.drhp_fresh_issue))! * 1e7) / price : null)
+  if (pre && freshSh != null) return { value: pre + freshSh, basis: 'pre-issue shares + fresh-issue shares at issue price' }
+  return { value: null, basis: '' }
+}
+export const mcapAtIssue = (r: CompanyRecord) => { const n = shareCount(r).value, p = issuePrice(r); return n && p ? (n * p) / 1e7 : null }
+export const mcapNow = (r: CompanyRecord) => quote(r)?.mcap_cr ?? (shareCount(r).value && cmp(r) ? (shareCount(r).value! * cmp(r)!) / 1e7 : null)
+
+/** Last real activity date (filing, issue, listing) — default sort key for every list. */
+export function lastActivity(r: CompanyRecord, today = isoToday()): string {
+  return r.events.filter(e => e.date_kind !== 'derived' && e.date <= today).reduce((m, e) => (e.date > m ? e.date : m), '0000')
+}
+export const listedOn = (r: CompanyRecord) => r.events.filter(e => e.event_type === 'LISTING' && e.date_kind === 'actual').map(e => e.date).sort()[0] ?? null
+
+/** Valuation inputs at two price points: issue price and current market price. Every value is CALCULATED. */
+export function valuationInputs(r: CompanyRecord) {
+  const sc = shareCount(r)
+  const pat = latest(r, 'pat'), ebitda = latest(r, 'ebitda'), rev = latest(r, 'revenue_from_operations')
+  const nw = latest(r, 'net_worth'), debt = latest(r, 'total_borrowings'), cash = latest(r, 'cash_and_equivalents')
+  const f = ipo(r)?.facts ?? {}
+  const fresh = fv(f.fresh_issue) ?? fv(f.drhp_fresh_issue)
+  const points = [{ key: 'issue', label: 'At issue price', price: issuePrice(r) }, { key: 'cmp', label: 'At market price', price: cmp(r) }]
+  const per = (price: number | null) => {
+    const mcap = price && sc.value ? (price * sc.value) / 1e7 : null
+    const netDebt = fv(debt) != null && fv(cash) != null ? fv(debt)! - fv(cash)! - (fresh ?? 0) : null
+    const ev = mcap != null && netDebt != null ? mcap + netDebt : null
+    return {
+      mcap, ev,
+      pe: mcap != null && fv(pat) ? (fv(pat)! > 0 ? mcap / fv(pat)! : null) : null,
+      pb: mcap != null && fv(nw) ? mcap / fv(nw)! : null,
+      ps: mcap != null && fv(rev) ? mcap / fv(rev)! : null,
+      evEbitda: ev != null && fv(ebitda) ? (fv(ebitda)! > 0 ? ev / fv(ebitda)! : null) : null,
+    }
+  }
+  return {
+    points: points.map(p => ({ ...p, ...per(p.price) })), shares: sc,
+    inputs: { pat, ebitda, rev, nw, debt, cash, fresh },
+    lossMaking: fv(pat) != null && fv(pat)! <= 0,
+  }
+}
+
+// ───────── portfolio marks (listed and pre-IPO) ─────────
+export interface Mark { label: string; date: string | null; value_cr: number | null; perShare: number | null; multiple: number | null; cagr: number | null }
+export function holdingMarks(r: CompanyRecord, h: import('./types').Holding): { cost_cr: number | null; marks: Mark[] } {
+  const qty = h.quantity || 0
+  const cost_cr = h.invested_cr ?? (qty && h.avg_cost ? (qty * h.avg_cost) / 1e7 : null)
+  const entryVal = h.entry_valuation_cr ?? null
+  const marks: Mark[] = []
+  const years = (d: string | null) => d ? Math.max((Date.parse(d) - Date.parse(h.acquired_on)) / (365.25 * 864e5), 1 / 365) : null
+  const add = (label: string, date: string | null, valuation_cr: number | null, perShare: number | null) => {
+    let multiple: number | null = null
+    if (perShare != null && h.avg_cost) multiple = perShare / h.avg_cost
+    else if (valuation_cr != null && entryVal) multiple = valuation_cr / entryVal
+    const y = years(date)
+    marks.push({ label, date, value_cr: valuation_cr, perShare, multiple, cagr: multiple != null && y ? (Math.pow(multiple, 1 / y) - 1) * 100 : null })
+  }
+  if (h.latest_round_cr) add('Latest private round', h.latest_round_on ?? null, h.latest_round_cr, null)
+  const ip = issuePrice(r)
+  if (ip) add('IPO issue price', eventDate(r, 'BASIS_OF_ALLOTMENT') ?? eventDate(r, 'ISSUE_CLOSE'), mcapAtIssue(r), ip)
+  const c = cmp(r)
+  if (c) add('Market price', quote(r)?.date ?? null, mcapNow(r), c)
+  return { cost_cr, marks }
 }
 
 export const isHeld = (v: Vault, id: string) => v.portfolio.holdings.some(h => h.company_id === id)
