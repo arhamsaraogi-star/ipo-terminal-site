@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "facts.schema.json",
+  "title": "Company facts file — financials, industry and operating statistics",
+  "type": "object",
+  "required": ["company_id", "financials", "industry"],
+  "additionalProperties": false,
+  "properties": {
+    "company_id": { "$ref": "common.schema.json#/$defs/company_id" },
+    "financials": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/fact" } },
+    "industry": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/fact" } },
+    "operating": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/fact" } }
+  }
+}

@@ -1,0 +1,5 @@
+jsonschema>=4.21
+referencing>=0.35
+pyyaml>=6
+cryptography>=42
+pytest>=8

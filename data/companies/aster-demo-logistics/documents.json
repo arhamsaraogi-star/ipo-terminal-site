@@ -1,0 +1,17 @@
+[
+  {
+    "document_id": "sample",
+    "company_id": "aster-demo-logistics",
+    "doc_type": "SAMPLE",
+    "title": "Demo offer document",
+    "url": "sample://demo-document",
+    "source": "SAMPLE",
+    "filing_date": "2026-07-20",
+    "downloaded_at": "2026-10-05T08:00:00+05:30",
+    "sha256": null,
+    "pages": 420,
+    "storage": null,
+    "version": 1,
+    "previous_version": null
+  }
+]

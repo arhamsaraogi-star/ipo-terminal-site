@@ -1,0 +1,39 @@
+{
+  "company_id": "ember-demo-mobility",
+  "name": "Ember Demo Mobility Pvt Ltd",
+  "legal_name": "Ember Demo Mobility Pvt Ltd",
+  "aliases": [],
+  "identifiers": {
+    "cin": null,
+    "isin": null,
+    "nse_symbol": null,
+    "bse_code": null
+  },
+  "sector": "Consumer Discretionary",
+  "industry": "EV two-wheelers",
+  "segment": "UNKNOWN",
+  "lifecycle": "PRIVATE",
+  "private_tracker": {
+    "confidence": "CREDIBLE_REPORT",
+    "expected_timing": "H1 2027",
+    "sources": [
+      {
+        "source_type": "SAMPLE",
+        "document_id": "sample",
+        "page": null,
+        "table": null,
+        "section": null,
+        "url": "sample://demo-document",
+        "sha256": null,
+        "tier": "primary"
+      }
+    ]
+  },
+  "overview": null,
+  "website": null,
+  "ir_url": null,
+  "registered_office": null,
+  "is_sample": true,
+  "created_at": "2026-10-05T08:00:00+05:30",
+  "updated_at": "2026-10-05T08:00:00+05:30"
+}

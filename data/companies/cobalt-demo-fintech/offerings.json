@@ -1,0 +1,66 @@
+[
+  {
+    "offering_id": "cobalt-demo-fintech:ipo:2027",
+    "company_id": "cobalt-demo-fintech",
+    "type": "IPO",
+    "segment": "MAINBOARD",
+    "exchanges": [
+      "NSE",
+      "BSE"
+    ],
+    "facts": {
+      "fresh_issue": {
+        "fact_id": "cobalt-demo-fintech:fresh_issue:na",
+        "metric": "fresh_issue",
+        "label": "Fresh issue",
+        "value": 1200.0,
+        "unit": "INR crore",
+        "period": null,
+        "basis": "offer",
+        "kind": "reported",
+        "formula": null,
+        "inputs": [],
+        "source": {
+          "source_type": "SAMPLE",
+          "document_id": "sample",
+          "page": 8,
+          "table": null,
+          "section": null,
+          "url": "sample://demo-document",
+          "sha256": null,
+          "tier": "primary"
+        },
+        "extraction": {
+          "method": "sample",
+          "extracted_at": "2026-10-05T08:00:00+05:30",
+          "extractor_version": "sample",
+          "confidence": "high"
+        },
+        "status": "ok",
+        "note": null,
+        "supersedes": null
+      },
+      "ofs": {
+        "fact_id": "cobalt-demo-fintech:ofs:na",
+        "metric": "ofs",
+        "label": null,
+        "value": null,
+        "unit": "INR crore",
+        "period": null,
+        "basis": "offer",
+        "kind": "reported",
+        "formula": null,
+        "inputs": [],
+        "source": null,
+        "extraction": null,
+        "status": "not_available",
+        "note": "OFS stated in shares only; value set at RHP",
+        "supersedes": null
+      }
+    },
+    "intermediaries": {
+      "brlms": [],
+      "registrar": null
+    }
+  }
+]

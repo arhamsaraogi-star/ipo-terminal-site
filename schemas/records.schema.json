@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "records.schema.json",
+  "title": "Line-oriented records: documents, events, lock-in tranches, news, changes, holdings",
+  "$defs": {
+    "document": {
+      "type": "object",
+      "required": ["document_id", "company_id", "doc_type", "url", "filing_date", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "document_id": { "type": "string" },
+        "company_id": { "$ref": "common.schema.json#/$defs/company_id" },
+        "doc_type": { "$ref": "common.schema.json#/$defs/source_type" },
+        "title": { "type": ["string", "null"] },
+        "url": { "type": "string" },
+        "source": { "type": "string", "description": "SEBI | NSE | BSE | COMPANY | ..." },
+        "filing_date": { "oneOf": [{ "$ref": "common.schema.json#/$defs/date" }, { "type": "null" }] },
+        "downloaded_at": { "oneOf": [{ "$ref": "common.schema.json#/$defs/datetime" }, { "type": "null" }] },
+        "sha256": { "oneOf": [{ "$ref": "common.schema.json#/$defs/sha256" }, { "type": "null" }] },
+        "pages": { "type": ["integer", "null"] },
+        "storage": { "type": ["string", "null"], "description": "release-asset://<tag>/<file> — PDFs never live in git" },
+        "version": { "type": "integer", "minimum": 1 },
+        "previous_version": { "type": ["string", "null"] }
+      }
+    },
+    "event": {
+      "type": "object",
+      "required": ["event_id", "company_id", "event_type", "date", "date_kind", "detected_at"],
+      "additionalProperties": false,
+      "properties": {
+        "event_id": { "type": "string" },
+        "company_id": { "$ref": "common.schema.json#/$defs/company_id" },
+        "offering_id": { "type": ["string", "null"] },
+        "event_type": { "type": "string", "pattern": "^[A-Z0-9_]+$", "description": "Must exist in rules/event_types.yaml" },
+        "date": { "$ref": "common.schema.json#/$defs/date" },
+        "date_kind": { "enum": ["actual", "scheduled", "derived"] },
+        "detail": { "type": ["string", "null"] },
+        "source": { "oneOf": [{ "$ref": "common.schema.json#/$defs/source" }, { "type": "null" }] },
+        "rule_id": { "type": ["string", "null"] },
+        "detected_at": { "$ref": "common.schema.json#/$defs/datetime" }
+      }
+    },
+    "lockin": {
+      "type": "object",
+      "required": ["tranche_id", "company_id", "holder_category", "start_date", "expiry_date", "rule_id"],
+      "additionalProperties": false,
+      "properties": {
+        "tranche_id": { "type": "string" },
+        "company_id": { "$ref": "common.schema.json#/$defs/company_id" },
+        "offering_id": { "type": ["string", "null"] },
+        "holder_category": { "enum": ["PROMOTER_MIN_CONTRIBUTION", "PROMOTER_EXCESS", "PRE_IPO_NON_PROMOTER", "ANCHOR", "OTHER"] },
+        "shares": { "$ref": "common.schema.json#/$defs/fact" },
+        "pct_post_issue": { "$ref": "common.schema.json#/$defs/fact" },
+        "start_date": { "$ref": "common.schema.json#/$defs/date" },
+        "expiry_date": { "$ref": "common.schema.json#/$defs/date" },
+        "rule_id": { "type": "string" },
+        "rule_verified": { "type": "boolean" }
+      }
+    },
+    "news": {
+      "type": "object",
+      "required": ["news_id", "company_id", "published_at", "title", "url", "tier", "category"],
+      "additionalProperties": false,
+      "properties": {
+        "news_id": { "type": "string" },
+        "company_id": { "$ref": "common.schema.json#/$defs/company_id" },
+        "published_at": { "$ref": "common.schema.json#/$defs/datetime" },
+        "title": { "type": "string" },
+        "url": { "type": "string" },
+        "publisher": { "type": ["string", "null"] },
+        "tier": { "enum": ["official", "media"] },
+        "category": { "type": "string" },
+        "dedupe_key": { "type": ["string", "null"] }
+      }
+    },
+    "change": {
+      "type": "object",
+      "required": ["change_id", "company_id", "field", "old", "new", "detected_at"],
+      "additionalProperties": false,
+      "properties": {
+        "change_id": { "type": "string" },
+        "company_id": { "$ref": "common.schema.json#/$defs/company_id" },
+        "field": { "type": "string" },
+        "label": { "type": ["string", "null"] },
+        "old": {},
+        "new": {},
+        "source": { "oneOf": [{ "$ref": "common.schema.json#/$defs/source" }, { "type": "null" }] },
+        "detected_at": { "$ref": "common.schema.json#/$defs/datetime" }
+      }
+    },
+    "holding": {
+      "type": "object",
+      "required": ["company_id", "quantity", "avg_cost", "acquired_on", "route"],
+      "additionalProperties": false,
+      "properties": {
+        "company_id": { "$ref": "common.schema.json#/$defs/company_id" },
+        "quantity": { "type": "integer", "minimum": 0 },
+        "avg_cost": { "type": "number", "minimum": 0 },
+        "acquired_on": { "$ref": "common.schema.json#/$defs/date" },
+        "route": { "enum": ["ALLOTMENT", "MARKET", "PRE_IPO"] },
+        "note": { "type": ["string", "null"] }
+      }
+    },
+    "documents_file": { "type": "array", "items": { "$ref": "#/$defs/document" } },
+    "lockins_file": { "type": "array", "items": { "$ref": "#/$defs/lockin" } },
+    "portfolio_file": {
+      "type": "object",
+      "required": ["holdings", "watchlist"],
+      "additionalProperties": false,
+      "properties": {
+        "holdings": { "type": "array", "items": { "$ref": "#/$defs/holding" } },
+        "watchlist": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/company_id" }, "uniqueItems": true }
+      }
+    }
+  }
+}

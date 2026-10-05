@@ -1,0 +1,197 @@
+[
+  {
+    "tranche_id": "aster-demo-logistics:ipo:2026:anchor:1",
+    "company_id": "aster-demo-logistics",
+    "offering_id": "aster-demo-logistics:ipo:2026",
+    "holder_category": "ANCHOR",
+    "shares": {
+      "fact_id": "aster-demo-logistics:ipo:2026:anchor:1:shares",
+      "metric": "lockin_shares",
+      "value": 5208333,
+      "unit": "shares",
+      "kind": "calculated",
+      "formula": "anchor_shares x 0.5",
+      "inputs": [
+        "aster-demo-logistics:anchor_shares:na"
+      ],
+      "source": null,
+      "extraction": null,
+      "status": "ok"
+    },
+    "start_date": "2026-07-31",
+    "expiry_date": "2026-08-30",
+    "rule_id": "MB_ANCHOR_2023",
+    "rule_verified": false,
+    "pct_post_issue": {
+      "fact_id": "aster-demo-logistics:ipo:2026:anchor:1:pct",
+      "metric": "lockin_pct_post_issue",
+      "value": 2.6,
+      "unit": "%",
+      "kind": "calculated",
+      "formula": "lockin_shares / post_issue_shares",
+      "inputs": [
+        "aster-demo-logistics:ipo:2026:anchor:1:shares",
+        "aster-demo-logistics:post_issue_shares:na"
+      ],
+      "source": null,
+      "extraction": null,
+      "status": "ok"
+    }
+  },
+  {
+    "tranche_id": "aster-demo-logistics:ipo:2026:anchor:2",
+    "company_id": "aster-demo-logistics",
+    "offering_id": "aster-demo-logistics:ipo:2026",
+    "holder_category": "ANCHOR",
+    "shares": {
+      "fact_id": "aster-demo-logistics:ipo:2026:anchor:2:shares",
+      "metric": "lockin_shares",
+      "value": 5208333,
+      "unit": "shares",
+      "kind": "calculated",
+      "formula": "anchor_shares x 0.5",
+      "inputs": [
+        "aster-demo-logistics:anchor_shares:na"
+      ],
+      "source": null,
+      "extraction": null,
+      "status": "ok"
+    },
+    "start_date": "2026-07-31",
+    "expiry_date": "2026-10-29",
+    "rule_id": "MB_ANCHOR_2023",
+    "rule_verified": false,
+    "pct_post_issue": {
+      "fact_id": "aster-demo-logistics:ipo:2026:anchor:2:pct",
+      "metric": "lockin_pct_post_issue",
+      "value": 2.6,
+      "unit": "%",
+      "kind": "calculated",
+      "formula": "lockin_shares / post_issue_shares",
+      "inputs": [
+        "aster-demo-logistics:ipo:2026:anchor:2:shares",
+        "aster-demo-logistics:post_issue_shares:na"
+      ],
+      "source": null,
+      "extraction": null,
+      "status": "ok"
+    }
+  },
+  {
+    "tranche_id": "aster-demo-logistics:ipo:2026:promoter_excess:1",
+    "company_id": "aster-demo-logistics",
+    "offering_id": "aster-demo-logistics:ipo:2026",
+    "holder_category": "PROMOTER_EXCESS",
+    "shares": {
+      "fact_id": "aster-demo-logistics:ipo:2026:promoter_excess:1:shares",
+      "metric": "lockin_shares",
+      "value": 76200000,
+      "unit": "shares",
+      "kind": "calculated",
+      "formula": "promoter_excess_shares x 1.0",
+      "inputs": [
+        "aster-demo-logistics:promoter_excess_shares:na"
+      ],
+      "source": null,
+      "extraction": null,
+      "status": "ok"
+    },
+    "start_date": "2026-07-31",
+    "expiry_date": "2027-01-31",
+    "rule_id": "MB_PROMOTER_EXCESS_2021",
+    "rule_verified": false,
+    "pct_post_issue": {
+      "fact_id": "aster-demo-logistics:ipo:2026:promoter_excess:1:pct",
+      "metric": "lockin_pct_post_issue",
+      "value": 38.1,
+      "unit": "%",
+      "kind": "calculated",
+      "formula": "lockin_shares / post_issue_shares",
+      "inputs": [
+        "aster-demo-logistics:ipo:2026:promoter_excess:1:shares",
+        "aster-demo-logistics:post_issue_shares:na"
+      ],
+      "source": null,
+      "extraction": null,
+      "status": "ok"
+    }
+  },
+  {
+    "tranche_id": "aster-demo-logistics:ipo:2026:pre_ipo_non_promoter:1",
+    "company_id": "aster-demo-logistics",
+    "offering_id": "aster-demo-logistics:ipo:2026",
+    "holder_category": "PRE_IPO_NON_PROMOTER",
+    "shares": {
+      "fact_id": "aster-demo-logistics:ipo:2026:pre_ipo_non_promoter:1:shares",
+      "metric": "lockin_shares",
+      "value": 31500000,
+      "unit": "shares",
+      "kind": "calculated",
+      "formula": "pre_ipo_non_promoter_shares x 1.0",
+      "inputs": [
+        "aster-demo-logistics:pre_ipo_non_promoter_shares:na"
+      ],
+      "source": null,
+      "extraction": null,
+      "status": "ok"
+    },
+    "start_date": "2026-07-31",
+    "expiry_date": "2027-01-31",
+    "rule_id": "MB_PRE_IPO_2021",
+    "rule_verified": false,
+    "pct_post_issue": {
+      "fact_id": "aster-demo-logistics:ipo:2026:pre_ipo_non_promoter:1:pct",
+      "metric": "lockin_pct_post_issue",
+      "value": 15.75,
+      "unit": "%",
+      "kind": "calculated",
+      "formula": "lockin_shares / post_issue_shares",
+      "inputs": [
+        "aster-demo-logistics:ipo:2026:pre_ipo_non_promoter:1:shares",
+        "aster-demo-logistics:post_issue_shares:na"
+      ],
+      "source": null,
+      "extraction": null,
+      "status": "ok"
+    }
+  },
+  {
+    "tranche_id": "aster-demo-logistics:ipo:2026:promoter_min_contribution:1",
+    "company_id": "aster-demo-logistics",
+    "offering_id": "aster-demo-logistics:ipo:2026",
+    "holder_category": "PROMOTER_MIN_CONTRIBUTION",
+    "shares": {
+      "fact_id": "aster-demo-logistics:ipo:2026:promoter_min_contribution:1:shares",
+      "metric": "lockin_shares",
+      "value": 40000000,
+      "unit": "shares",
+      "kind": "calculated",
+      "formula": "promoter_min_contribution_shares x 1.0",
+      "inputs": [
+        "aster-demo-logistics:promoter_min_contribution_shares:na"
+      ],
+      "source": null,
+      "extraction": null,
+      "status": "ok"
+    },
+    "start_date": "2026-07-31",
+    "expiry_date": "2028-01-31",
+    "rule_id": "MB_PROMOTER_MIN_2021",
+    "rule_verified": false,
+    "pct_post_issue": {
+      "fact_id": "aster-demo-logistics:ipo:2026:promoter_min_contribution:1:pct",
+      "metric": "lockin_pct_post_issue",
+      "value": 20.0,
+      "unit": "%",
+      "kind": "calculated",
+      "formula": "lockin_shares / post_issue_shares",
+      "inputs": [
+        "aster-demo-logistics:ipo:2026:promoter_min_contribution:1:shares",
+        "aster-demo-logistics:post_issue_shares:na"
+      ],
+      "source": null,
+      "extraction": null,
+      "status": "ok"
+    }
+  }
+]

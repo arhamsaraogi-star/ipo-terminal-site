@@ -1,0 +1,6 @@
+{
+  "salt": "a8c991611a46e52d2ae2a07269fbef27",
+  "iterations": 600000,
+  "repo": null,
+  "_note": "Salt is public by design. Rotate with: python scripts/rotate_salt.py (also change the TERMINAL_PASSPHRASE secret)."
+}

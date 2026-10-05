@@ -1,0 +1,40 @@
+{
+  "company_id": "borealis-demo-foods",
+  "name": "Borealis Demo Foods Ltd",
+  "legal_name": "Borealis Demo Foods Ltd",
+  "aliases": [],
+  "identifiers": {
+    "cin": null,
+    "isin": null,
+    "nse_symbol": null,
+    "bse_code": null
+  },
+  "sector": "Consumer Staples",
+  "industry": "Packaged foods",
+  "segment": "MAINBOARD",
+  "lifecycle": "ISSUE_ANNOUNCED",
+  "private_tracker": null,
+  "overview": {
+    "summary": "DEMO COMPANY. Fictional packaged-snacks maker used to test the terminal.",
+    "segments": [
+      "Snacks",
+      "Ready-to-cook"
+    ],
+    "source": {
+      "source_type": "SAMPLE",
+      "document_id": "sample",
+      "page": 98,
+      "table": null,
+      "section": null,
+      "url": "sample://demo-document",
+      "sha256": null,
+      "tier": "primary"
+    }
+  },
+  "website": null,
+  "ir_url": null,
+  "registered_office": null,
+  "is_sample": true,
+  "created_at": "2026-10-05T08:00:00+05:30",
+  "updated_at": "2026-10-05T08:00:00+05:30"
+}

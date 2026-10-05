@@ -1,0 +1,16 @@
+{
+  "holdings": [
+    {
+      "company_id": "aster-demo-logistics",
+      "quantity": 340,
+      "avg_cost": 432.0,
+      "acquired_on": "2026-07-31",
+      "route": "ALLOTMENT",
+      "note": "DEMO holding"
+    }
+  ],
+  "watchlist": [
+    "borealis-demo-foods",
+    "cobalt-demo-fintech"
+  ]
+}

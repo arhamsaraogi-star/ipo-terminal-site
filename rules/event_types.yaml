@@ -1,0 +1,29 @@
+# Extensible event registry. Adding an event type = adding an entry here; no schema change.
+# order: position on the lifecycle timeline. group: pipeline | issue | post_listing | lockin | corporate
+DRHP_FILED:            { label: DRHP filed,                 group: pipeline,     order: 10 }
+SEBI_OBSERVATION:      { label: SEBI observation issued,    group: pipeline,     order: 20 }
+DRHP_RETURNED:         { label: DRHP returned / withdrawn,  group: pipeline,     order: 21 }
+UDRHP_FILED:           { label: Updated DRHP filed,         group: pipeline,     order: 25 }
+RHP_FILED:             { label: RHP filed,                  group: pipeline,     order: 30 }
+ISSUE_ANNOUNCED:       { label: Issue dates announced,      group: issue,        order: 40 }
+PRICE_BAND_ANNOUNCED:  { label: Price band announced,       group: issue,        order: 45 }
+ANCHOR_BIDDING:        { label: Anchor bidding,             group: issue,        order: 50 }
+ANCHOR_ALLOCATION:     { label: Anchor allocation published, group: issue,       order: 55 }
+ISSUE_OPEN:            { label: Issue opens,                group: issue,        order: 60 }
+ISSUE_CLOSE:           { label: Issue closes,               group: issue,        order: 65 }
+BASIS_OF_ALLOTMENT:    { label: Basis of allotment,         group: issue,        order: 70 }
+REFUND_DEMAT:          { label: Refunds / demat credit,     group: issue,        order: 75 }
+LISTING:               { label: Listing,                    group: issue,        order: 80 }
+LOCKIN_EXPIRY:         { label: Lock-in expiry,             group: lockin,       order: 90 }
+LISTING_ANNIVERSARY:   { label: Listing anniversary,        group: post_listing, order: 95 }
+QUARTERLY_RESULTS:     { label: Quarterly results,          group: post_listing, order: 100 }
+SHAREHOLDING_PATTERN:  { label: Shareholding pattern filed, group: post_listing, order: 101 }
+BULK_BLOCK_DEAL:       { label: Bulk / block deal,          group: post_listing, order: 102 }
+QIP:                   { label: QIP,                        group: corporate,    order: 110 }
+FPO:                   { label: FPO,                        group: corporate,    order: 111 }
+OFS:                   { label: Offer for sale,             group: corporate,    order: 112 }
+RIGHTS_ISSUE:          { label: Rights issue,               group: corporate,    order: 113 }
+PREFERENTIAL_ISSUE:    { label: Preferential issue,         group: corporate,    order: 114 }
+BONUS:                 { label: Bonus,                      group: corporate,    order: 115 }
+SPLIT:                 { label: Stock split,                group: corporate,    order: 116 }
+BUYBACK:               { label: Buyback,                    group: corporate,    order: 117 }

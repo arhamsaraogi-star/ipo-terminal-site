@@ -1,0 +1,565 @@
+{
+  "company_id": "cobalt-demo-fintech",
+  "financials": [
+    {
+      "fact_id": "cobalt-demo-fintech:revenue_from_operations:FY2025",
+      "metric": "revenue_from_operations",
+      "label": "Revenue from operations",
+      "value": 410.0,
+      "unit": "INR crore",
+      "period": "FY2025",
+      "basis": "restated_consolidated",
+      "kind": "reported",
+      "formula": null,
+      "inputs": [],
+      "source": {
+        "source_type": "SAMPLE",
+        "document_id": "sample",
+        "page": 212,
+        "table": "Restated Consolidated Statement of Profit and Loss",
+        "section": null,
+        "url": "sample://demo-document",
+        "sha256": null,
+        "tier": "primary"
+      },
+      "extraction": {
+        "method": "sample",
+        "extracted_at": "2026-10-05T08:00:00+05:30",
+        "extractor_version": "sample",
+        "confidence": "high"
+      },
+      "status": "ok",
+      "note": null,
+      "supersedes": null
+    },
+    {
+      "fact_id": "cobalt-demo-fintech:ebitda:FY2025",
+      "metric": "ebitda",
+      "label": "EBITDA",
+      "value": -62.0,
+      "unit": "INR crore",
+      "period": "FY2025",
+      "basis": "restated_consolidated",
+      "kind": "reported",
+      "formula": null,
+      "inputs": [],
+      "source": {
+        "source_type": "SAMPLE",
+        "document_id": "sample",
+        "page": 212,
+        "table": "Restated Consolidated Statement of Profit and Loss",
+        "section": null,
+        "url": "sample://demo-document",
+        "sha256": null,
+        "tier": "primary"
+      },
+      "extraction": {
+        "method": "sample",
+        "extracted_at": "2026-10-05T08:00:00+05:30",
+        "extractor_version": "sample",
+        "confidence": "high"
+      },
+      "status": "ok",
+      "note": null,
+      "supersedes": null
+    },
+    {
+      "fact_id": "cobalt-demo-fintech:depreciation:FY2025",
+      "metric": "depreciation",
+      "label": "Depreciation & amortisation",
+      "value": 18.0,
+      "unit": "INR crore",
+      "period": "FY2025",
+      "basis": "restated_consolidated",
+      "kind": "reported",
+      "formula": null,
+      "inputs": [],
+      "source": {
+        "source_type": "SAMPLE",
+        "document_id": "sample",
+        "page": 212,
+        "table": "Restated Consolidated Statement of Profit and Loss",
+        "section": null,
+        "url": "sample://demo-document",
+        "sha256": null,
+        "tier": "primary"
+      },
+      "extraction": {
+        "method": "sample",
+        "extracted_at": "2026-10-05T08:00:00+05:30",
+        "extractor_version": "sample",
+        "confidence": "high"
+      },
+      "status": "ok",
+      "note": null,
+      "supersedes": null
+    },
+    {
+      "fact_id": "cobalt-demo-fintech:ebit:FY2025",
+      "metric": "ebit",
+      "label": "EBIT",
+      "value": -80.0,
+      "unit": "INR crore",
+      "period": "FY2025",
+      "basis": "restated_consolidated",
+      "kind": "reported",
+      "formula": null,
+      "inputs": [],
+      "source": {
+        "source_type": "SAMPLE",
+        "document_id": "sample",
+        "page": 212,
+        "table": "Restated Consolidated Statement of Profit and Loss",
+        "section": null,
+        "url": "sample://demo-document",
+        "sha256": null,
+        "tier": "primary"
+      },
+      "extraction": {
+        "method": "sample",
+        "extracted_at": "2026-10-05T08:00:00+05:30",
+        "extractor_version": "sample",
+        "confidence": "high"
+      },
+      "status": "ok",
+      "note": null,
+      "supersedes": null
+    },
+    {
+      "fact_id": "cobalt-demo-fintech:finance_cost:FY2025",
+      "metric": "finance_cost",
+      "label": "Finance cost",
+      "value": 4.0,
+      "unit": "INR crore",
+      "period": "FY2025",
+      "basis": "restated_consolidated",
+      "kind": "reported",
+      "formula": null,
+      "inputs": [],
+      "source": {
+        "source_type": "SAMPLE",
+        "document_id": "sample",
+        "page": 212,
+        "table": "Restated Consolidated Statement of Profit and Loss",
+        "section": null,
+        "url": "sample://demo-document",
+        "sha256": null,
+        "tier": "primary"
+      },
+      "extraction": {
+        "method": "sample",
+        "extracted_at": "2026-10-05T08:00:00+05:30",
+        "extractor_version": "sample",
+        "confidence": "high"
+      },
+      "status": "ok",
+      "note": null,
+      "supersedes": null
+    },
+    {
+      "fact_id": "cobalt-demo-fintech:other_income:FY2025",
+      "metric": "other_income",
+      "label": "Other income",
+      "value": 22.0,
+      "unit": "INR crore",
+      "period": "FY2025",
+      "basis": "restated_consolidated",
+      "kind": "reported",
+      "formula": null,
+      "inputs": [],
+      "source": {
+        "source_type": "SAMPLE",
+        "document_id": "sample",
+        "page": 212,
+        "table": "Restated Consolidated Statement of Profit and Loss",
+        "section": null,
+        "url": "sample://demo-document",
+        "sha256": null,
+        "tier": "primary"
+      },
+      "extraction": {
+        "method": "sample",
+        "extracted_at": "2026-10-05T08:00:00+05:30",
+        "extractor_version": "sample",
+        "confidence": "high"
+      },
+      "status": "ok",
+      "note": null,
+      "supersedes": null
+    },
+    {
+      "fact_id": "cobalt-demo-fintech:pbt:FY2025",
+      "metric": "pbt",
+      "label": "Profit before tax",
+      "value": -62.0,
+      "unit": "INR crore",
+      "period": "FY2025",
+      "basis": "restated_consolidated",
+      "kind": "reported",
+      "formula": null,
+      "inputs": [],
+      "source": {
+        "source_type": "SAMPLE",
+        "document_id": "sample",
+        "page": 212,
+        "table": "Restated Consolidated Statement of Profit and Loss",
+        "section": null,
+        "url": "sample://demo-document",
+        "sha256": null,
+        "tier": "primary"
+      },
+      "extraction": {
+        "method": "sample",
+        "extracted_at": "2026-10-05T08:00:00+05:30",
+        "extractor_version": "sample",
+        "confidence": "high"
+      },
+      "status": "ok",
+      "note": null,
+      "supersedes": null
+    },
+    {
+      "fact_id": "cobalt-demo-fintech:tax:FY2025",
+      "metric": "tax",
+      "label": "Tax",
+      "value": -0.0,
+      "unit": "INR crore",
+      "period": "FY2025",
+      "basis": "restated_consolidated",
+      "kind": "reported",
+      "formula": null,
+      "inputs": [],
+      "source": {
+        "source_type": "SAMPLE",
+        "document_id": "sample",
+        "page": 212,
+        "table": "Restated Consolidated Statement of Profit and Loss",
+        "section": null,
+        "url": "sample://demo-document",
+        "sha256": null,
+        "tier": "primary"
+      },
+      "extraction": {
+        "method": "sample",
+        "extracted_at": "2026-10-05T08:00:00+05:30",
+        "extractor_version": "sample",
+        "confidence": "high"
+      },
+      "status": "ok",
+      "note": null,
+      "supersedes": null
+    },
+    {
+      "fact_id": "cobalt-demo-fintech:pat:FY2025",
+      "metric": "pat",
+      "label": "Profit after tax",
+      "value": -62.0,
+      "unit": "INR crore",
+      "period": "FY2025",
+      "basis": "restated_consolidated",
+      "kind": "reported",
+      "formula": null,
+      "inputs": [],
+      "source": {
+        "source_type": "SAMPLE",
+        "document_id": "sample",
+        "page": 212,
+        "table": "Restated Consolidated Statement of Profit and Loss",
+        "section": null,
+        "url": "sample://demo-document",
+        "sha256": null,
+        "tier": "primary"
+      },
+      "extraction": {
+        "method": "sample",
+        "extracted_at": "2026-10-05T08:00:00+05:30",
+        "extractor_version": "sample",
+        "confidence": "high"
+      },
+      "status": "ok",
+      "note": null,
+      "supersedes": null
+    },
+    {
+      "fact_id": "cobalt-demo-fintech:revenue_from_operations:FY2026",
+      "metric": "revenue_from_operations",
+      "label": "Revenue from operations",
+      "value": 590.0,
+      "unit": "INR crore",
+      "period": "FY2026",
+      "basis": "restated_consolidated",
+      "kind": "reported",
+      "formula": null,
+      "inputs": [],
+      "source": {
+        "source_type": "SAMPLE",
+        "document_id": "sample",
+        "page": 212,
+        "table": "Restated Consolidated Statement of Profit and Loss",
+        "section": null,
+        "url": "sample://demo-document",
+        "sha256": null,
+        "tier": "primary"
+      },
+      "extraction": {
+        "method": "sample",
+        "extracted_at": "2026-10-05T08:00:00+05:30",
+        "extractor_version": "sample",
+        "confidence": "high"
+      },
+      "status": "ok",
+      "note": null,
+      "supersedes": null
+    },
+    {
+      "fact_id": "cobalt-demo-fintech:ebitda:FY2026",
+      "metric": "ebitda",
+      "label": "EBITDA",
+      "value": -14.0,
+      "unit": "INR crore",
+      "period": "FY2026",
+      "basis": "restated_consolidated",
+      "kind": "reported",
+      "formula": null,
+      "inputs": [],
+      "source": {
+        "source_type": "SAMPLE",
+        "document_id": "sample",
+        "page": 212,
+        "table": "Restated Consolidated Statement of Profit and Loss",
+        "section": null,
+        "url": "sample://demo-document",
+        "sha256": null,
+        "tier": "primary"
+      },
+      "extraction": {
+        "method": "sample",
+        "extracted_at": "2026-10-05T08:00:00+05:30",
+        "extractor_version": "sample",
+        "confidence": "high"
+      },
+      "status": "ok",
+      "note": null,
+      "supersedes": null
+    },
+    {
+      "fact_id": "cobalt-demo-fintech:depreciation:FY2026",
+      "metric": "depreciation",
+      "label": "Depreciation & amortisation",
+      "value": 21.0,
+      "unit": "INR crore",
+      "period": "FY2026",
+      "basis": "restated_consolidated",
+      "kind": "reported",
+      "formula": null,
+      "inputs": [],
+      "source": {
+        "source_type": "SAMPLE",
+        "document_id": "sample",
+        "page": 212,
+        "table": "Restated Consolidated Statement of Profit and Loss",
+        "section": null,
+        "url": "sample://demo-document",
+        "sha256": null,
+        "tier": "primary"
+      },
+      "extraction": {
+        "method": "sample",
+        "extracted_at": "2026-10-05T08:00:00+05:30",
+        "extractor_version": "sample",
+        "confidence": "high"
+      },
+      "status": "ok",
+      "note": null,
+      "supersedes": null
+    },
+    {
+      "fact_id": "cobalt-demo-fintech:ebit:FY2026",
+      "metric": "ebit",
+      "label": "EBIT",
+      "value": -35.0,
+      "unit": "INR crore",
+      "period": "FY2026",
+      "basis": "restated_consolidated",
+      "kind": "reported",
+      "formula": null,
+      "inputs": [],
+      "source": {
+        "source_type": "SAMPLE",
+        "document_id": "sample",
+        "page": 212,
+        "table": "Restated Consolidated Statement of Profit and Loss",
+        "section": null,
+        "url": "sample://demo-document",
+        "sha256": null,
+        "tier": "primary"
+      },
+      "extraction": {
+        "method": "sample",
+        "extracted_at": "2026-10-05T08:00:00+05:30",
+        "extractor_version": "sample",
+        "confidence": "high"
+      },
+      "status": "ok",
+      "note": null,
+      "supersedes": null
+    },
+    {
+      "fact_id": "cobalt-demo-fintech:finance_cost:FY2026",
+      "metric": "finance_cost",
+      "label": "Finance cost",
+      "value": 4.0,
+      "unit": "INR crore",
+      "period": "FY2026",
+      "basis": "restated_consolidated",
+      "kind": "reported",
+      "formula": null,
+      "inputs": [],
+      "source": {
+        "source_type": "SAMPLE",
+        "document_id": "sample",
+        "page": 212,
+        "table": "Restated Consolidated Statement of Profit and Loss",
+        "section": null,
+        "url": "sample://demo-document",
+        "sha256": null,
+        "tier": "primary"
+      },
+      "extraction": {
+        "method": "sample",
+        "extracted_at": "2026-10-05T08:00:00+05:30",
+        "extractor_version": "sample",
+        "confidence": "high"
+      },
+      "status": "ok",
+      "note": null,
+      "supersedes": null
+    },
+    {
+      "fact_id": "cobalt-demo-fintech:other_income:FY2026",
+      "metric": "other_income",
+      "label": "Other income",
+      "value": 31.0,
+      "unit": "INR crore",
+      "period": "FY2026",
+      "basis": "restated_consolidated",
+      "kind": "reported",
+      "formula": null,
+      "inputs": [],
+      "source": {
+        "source_type": "SAMPLE",
+        "document_id": "sample",
+        "page": 212,
+        "table": "Restated Consolidated Statement of Profit and Loss",
+        "section": null,
+        "url": "sample://demo-document",
+        "sha256": null,
+        "tier": "primary"
+      },
+      "extraction": {
+        "method": "sample",
+        "extracted_at": "2026-10-05T08:00:00+05:30",
+        "extractor_version": "sample",
+        "confidence": "high"
+      },
+      "status": "ok",
+      "note": null,
+      "supersedes": null
+    },
+    {
+      "fact_id": "cobalt-demo-fintech:pbt:FY2026",
+      "metric": "pbt",
+      "label": "Profit before tax",
+      "value": -8.0,
+      "unit": "INR crore",
+      "period": "FY2026",
+      "basis": "restated_consolidated",
+      "kind": "reported",
+      "formula": null,
+      "inputs": [],
+      "source": {
+        "source_type": "SAMPLE",
+        "document_id": "sample",
+        "page": 212,
+        "table": "Restated Consolidated Statement of Profit and Loss",
+        "section": null,
+        "url": "sample://demo-document",
+        "sha256": null,
+        "tier": "primary"
+      },
+      "extraction": {
+        "method": "sample",
+        "extracted_at": "2026-10-05T08:00:00+05:30",
+        "extractor_version": "sample",
+        "confidence": "high"
+      },
+      "status": "ok",
+      "note": null,
+      "supersedes": null
+    },
+    {
+      "fact_id": "cobalt-demo-fintech:tax:FY2026",
+      "metric": "tax",
+      "label": "Tax",
+      "value": -0.0,
+      "unit": "INR crore",
+      "period": "FY2026",
+      "basis": "restated_consolidated",
+      "kind": "reported",
+      "formula": null,
+      "inputs": [],
+      "source": {
+        "source_type": "SAMPLE",
+        "document_id": "sample",
+        "page": 212,
+        "table": "Restated Consolidated Statement of Profit and Loss",
+        "section": null,
+        "url": "sample://demo-document",
+        "sha256": null,
+        "tier": "primary"
+      },
+      "extraction": {
+        "method": "sample",
+        "extracted_at": "2026-10-05T08:00:00+05:30",
+        "extractor_version": "sample",
+        "confidence": "high"
+      },
+      "status": "ok",
+      "note": null,
+      "supersedes": null
+    },
+    {
+      "fact_id": "cobalt-demo-fintech:pat:FY2026",
+      "metric": "pat",
+      "label": "Profit after tax",
+      "value": -8.0,
+      "unit": "INR crore",
+      "period": "FY2026",
+      "basis": "restated_consolidated",
+      "kind": "reported",
+      "formula": null,
+      "inputs": [],
+      "source": {
+        "source_type": "SAMPLE",
+        "document_id": "sample",
+        "page": 212,
+        "table": "Restated Consolidated Statement of Profit and Loss",
+        "section": null,
+        "url": "sample://demo-document",
+        "sha256": null,
+        "tier": "primary"
+      },
+      "extraction": {
+        "method": "sample",
+        "extracted_at": "2026-10-05T08:00:00+05:30",
+        "extractor_version": "sample",
+        "confidence": "high"
+      },
+      "status": "ok",
+      "note": null,
+      "supersedes": null
+    }
+  ],
+  "industry": [],
+  "operating": []
+}

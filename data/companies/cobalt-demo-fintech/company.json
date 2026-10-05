@@ -1,0 +1,40 @@
+{
+  "company_id": "cobalt-demo-fintech",
+  "name": "Cobalt Demo Fintech Ltd",
+  "legal_name": "Cobalt Demo Fintech Ltd",
+  "aliases": [],
+  "identifiers": {
+    "cin": null,
+    "isin": null,
+    "nse_symbol": null,
+    "bse_code": null
+  },
+  "sector": "Financials",
+  "industry": "Payments",
+  "segment": "MAINBOARD",
+  "lifecycle": "DRHP_FILED",
+  "private_tracker": null,
+  "overview": {
+    "summary": "DEMO COMPANY. Fictional merchant-payments platform used to test the terminal.",
+    "segments": [
+      "Payment gateway",
+      "Merchant lending distribution"
+    ],
+    "source": {
+      "source_type": "SAMPLE",
+      "document_id": "sample",
+      "page": 77,
+      "table": null,
+      "section": null,
+      "url": "sample://demo-document",
+      "sha256": null,
+      "tier": "primary"
+    }
+  },
+  "website": null,
+  "ir_url": null,
+  "registered_office": null,
+  "is_sample": true,
+  "created_at": "2026-10-05T08:00:00+05:30",
+  "updated_at": "2026-10-05T08:00:00+05:30"
+}

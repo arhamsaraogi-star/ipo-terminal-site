@@ -1,0 +1,578 @@
+[
+  {
+    "offering_id": "aster-demo-logistics:ipo:2026",
+    "company_id": "aster-demo-logistics",
+    "type": "IPO",
+    "segment": "MAINBOARD",
+    "exchanges": [
+      "NSE",
+      "BSE"
+    ],
+    "facts": {
+      "fresh_issue": {
+        "fact_id": "aster-demo-logistics:fresh_issue:na",
+        "metric": "fresh_issue",
+        "label": "Fresh issue",
+        "value": 600.0,
+        "unit": "INR crore",
+        "period": null,
+        "basis": "offer",
+        "kind": "reported",
+        "formula": null,
+        "inputs": [],
+        "source": {
+          "source_type": "SAMPLE",
+          "document_id": "sample",
+          "page": 9,
+          "table": "The Offer",
+          "section": null,
+          "url": "sample://demo-document",
+          "sha256": null,
+          "tier": "primary"
+        },
+        "extraction": {
+          "method": "sample",
+          "extracted_at": "2026-10-05T08:00:00+05:30",
+          "extractor_version": "sample",
+          "confidence": "high"
+        },
+        "status": "ok",
+        "note": null,
+        "supersedes": null
+      },
+      "ofs": {
+        "fact_id": "aster-demo-logistics:ofs:na",
+        "metric": "ofs",
+        "label": "Offer for sale",
+        "value": 900.0,
+        "unit": "INR crore",
+        "period": null,
+        "basis": "offer",
+        "kind": "reported",
+        "formula": null,
+        "inputs": [],
+        "source": {
+          "source_type": "SAMPLE",
+          "document_id": "sample",
+          "page": 9,
+          "table": "The Offer",
+          "section": null,
+          "url": "sample://demo-document",
+          "sha256": null,
+          "tier": "primary"
+        },
+        "extraction": {
+          "method": "sample",
+          "extracted_at": "2026-10-05T08:00:00+05:30",
+          "extractor_version": "sample",
+          "confidence": "high"
+        },
+        "status": "ok",
+        "note": null,
+        "supersedes": null
+      },
+      "total_issue": {
+        "fact_id": "aster-demo-logistics:total_issue:na",
+        "metric": "total_issue",
+        "label": "Total issue",
+        "value": 1500.0,
+        "unit": "INR crore",
+        "period": null,
+        "basis": "offer",
+        "kind": "reported",
+        "formula": null,
+        "inputs": [],
+        "source": {
+          "source_type": "SAMPLE",
+          "document_id": "sample",
+          "page": 9,
+          "table": "The Offer",
+          "section": null,
+          "url": "sample://demo-document",
+          "sha256": null,
+          "tier": "primary"
+        },
+        "extraction": {
+          "method": "sample",
+          "extracted_at": "2026-10-05T08:00:00+05:30",
+          "extractor_version": "sample",
+          "confidence": "high"
+        },
+        "status": "ok",
+        "note": null,
+        "supersedes": null
+      },
+      "price_band_low": {
+        "fact_id": "aster-demo-logistics:price_band_low:na",
+        "metric": "price_band_low",
+        "label": "Price band — low",
+        "value": 410,
+        "unit": "INR",
+        "period": null,
+        "basis": "offer",
+        "kind": "reported",
+        "formula": null,
+        "inputs": [],
+        "source": {
+          "source_type": "SAMPLE",
+          "document_id": "sample",
+          "page": 1,
+          "table": null,
+          "section": null,
+          "url": "sample://demo-document",
+          "sha256": null,
+          "tier": "primary"
+        },
+        "extraction": {
+          "method": "sample",
+          "extracted_at": "2026-10-05T08:00:00+05:30",
+          "extractor_version": "sample",
+          "confidence": "high"
+        },
+        "status": "ok",
+        "note": null,
+        "supersedes": null
+      },
+      "price_band_high": {
+        "fact_id": "aster-demo-logistics:price_band_high:na",
+        "metric": "price_band_high",
+        "label": "Price band — high",
+        "value": 432,
+        "unit": "INR",
+        "period": null,
+        "basis": "offer",
+        "kind": "reported",
+        "formula": null,
+        "inputs": [],
+        "source": {
+          "source_type": "SAMPLE",
+          "document_id": "sample",
+          "page": 1,
+          "table": null,
+          "section": null,
+          "url": "sample://demo-document",
+          "sha256": null,
+          "tier": "primary"
+        },
+        "extraction": {
+          "method": "sample",
+          "extracted_at": "2026-10-05T08:00:00+05:30",
+          "extractor_version": "sample",
+          "confidence": "high"
+        },
+        "status": "ok",
+        "note": null,
+        "supersedes": null
+      },
+      "issue_price": {
+        "fact_id": "aster-demo-logistics:issue_price:na",
+        "metric": "issue_price",
+        "label": "Final issue price",
+        "value": 432,
+        "unit": "INR",
+        "period": null,
+        "basis": "offer",
+        "kind": "reported",
+        "formula": null,
+        "inputs": [],
+        "source": {
+          "source_type": "SAMPLE",
+          "document_id": "sample",
+          "page": 1,
+          "table": null,
+          "section": null,
+          "url": "sample://demo-document",
+          "sha256": null,
+          "tier": "primary"
+        },
+        "extraction": {
+          "method": "sample",
+          "extracted_at": "2026-10-05T08:00:00+05:30",
+          "extractor_version": "sample",
+          "confidence": "high"
+        },
+        "status": "ok",
+        "note": null,
+        "supersedes": null
+      },
+      "lot_size": {
+        "fact_id": "aster-demo-logistics:lot_size:na",
+        "metric": "lot_size",
+        "label": "Lot size",
+        "value": 34,
+        "unit": "shares",
+        "period": null,
+        "basis": "offer",
+        "kind": "reported",
+        "formula": null,
+        "inputs": [],
+        "source": {
+          "source_type": "SAMPLE",
+          "document_id": "sample",
+          "page": 1,
+          "table": null,
+          "section": null,
+          "url": "sample://demo-document",
+          "sha256": null,
+          "tier": "primary"
+        },
+        "extraction": {
+          "method": "sample",
+          "extracted_at": "2026-10-05T08:00:00+05:30",
+          "extractor_version": "sample",
+          "confidence": "high"
+        },
+        "status": "ok",
+        "note": null,
+        "supersedes": null
+      },
+      "face_value": {
+        "fact_id": "aster-demo-logistics:face_value:na",
+        "metric": "face_value",
+        "label": "Face value",
+        "value": 2,
+        "unit": "INR",
+        "period": null,
+        "basis": "offer",
+        "kind": "reported",
+        "formula": null,
+        "inputs": [],
+        "source": {
+          "source_type": "SAMPLE",
+          "document_id": "sample",
+          "page": 1,
+          "table": null,
+          "section": null,
+          "url": "sample://demo-document",
+          "sha256": null,
+          "tier": "primary"
+        },
+        "extraction": {
+          "method": "sample",
+          "extracted_at": "2026-10-05T08:00:00+05:30",
+          "extractor_version": "sample",
+          "confidence": "high"
+        },
+        "status": "ok",
+        "note": null,
+        "supersedes": null
+      },
+      "pre_issue_shares": {
+        "fact_id": "aster-demo-logistics:pre_issue_shares:na",
+        "metric": "pre_issue_shares",
+        "label": "Pre-issue shares",
+        "value": 186111111,
+        "unit": "shares",
+        "period": null,
+        "basis": "offer",
+        "kind": "reported",
+        "formula": null,
+        "inputs": [],
+        "source": {
+          "source_type": "SAMPLE",
+          "document_id": "sample",
+          "page": 88,
+          "table": "Capital Structure",
+          "section": null,
+          "url": "sample://demo-document",
+          "sha256": null,
+          "tier": "primary"
+        },
+        "extraction": {
+          "method": "sample",
+          "extracted_at": "2026-10-05T08:00:00+05:30",
+          "extractor_version": "sample",
+          "confidence": "high"
+        },
+        "status": "ok",
+        "note": null,
+        "supersedes": null
+      },
+      "fresh_issue_shares": {
+        "fact_id": "aster-demo-logistics:fresh_issue_shares:na",
+        "metric": "fresh_issue_shares",
+        "label": "Fresh issue shares",
+        "value": 13888889,
+        "unit": "shares",
+        "period": null,
+        "basis": "offer",
+        "kind": "reported",
+        "formula": null,
+        "inputs": [],
+        "source": {
+          "source_type": "SAMPLE",
+          "document_id": "sample",
+          "page": 88,
+          "table": "Capital Structure",
+          "section": null,
+          "url": "sample://demo-document",
+          "sha256": null,
+          "tier": "primary"
+        },
+        "extraction": {
+          "method": "sample",
+          "extracted_at": "2026-10-05T08:00:00+05:30",
+          "extractor_version": "sample",
+          "confidence": "high"
+        },
+        "status": "ok",
+        "note": null,
+        "supersedes": null
+      },
+      "post_issue_shares": {
+        "fact_id": "aster-demo-logistics:post_issue_shares:na",
+        "metric": "post_issue_shares",
+        "label": "Post-issue shares",
+        "value": 200000000,
+        "unit": "shares",
+        "period": null,
+        "basis": "offer",
+        "kind": "reported",
+        "formula": null,
+        "inputs": [],
+        "source": {
+          "source_type": "SAMPLE",
+          "document_id": "sample",
+          "page": 88,
+          "table": "Capital Structure",
+          "section": null,
+          "url": "sample://demo-document",
+          "sha256": null,
+          "tier": "primary"
+        },
+        "extraction": {
+          "method": "sample",
+          "extracted_at": "2026-10-05T08:00:00+05:30",
+          "extractor_version": "sample",
+          "confidence": "high"
+        },
+        "status": "ok",
+        "note": null,
+        "supersedes": null
+      },
+      "promoter_pre_pct": {
+        "fact_id": "aster-demo-logistics:promoter_pre_pct:na",
+        "metric": "promoter_pre_pct",
+        "label": "Promoter holding pre-issue",
+        "value": 72.4,
+        "unit": "%",
+        "period": null,
+        "basis": "offer",
+        "kind": "reported",
+        "formula": null,
+        "inputs": [],
+        "source": {
+          "source_type": "SAMPLE",
+          "document_id": "sample",
+          "page": 92,
+          "table": "Shareholding Pattern",
+          "section": null,
+          "url": "sample://demo-document",
+          "sha256": null,
+          "tier": "primary"
+        },
+        "extraction": {
+          "method": "sample",
+          "extracted_at": "2026-10-05T08:00:00+05:30",
+          "extractor_version": "sample",
+          "confidence": "high"
+        },
+        "status": "ok",
+        "note": null,
+        "supersedes": null
+      },
+      "promoter_post_pct": {
+        "fact_id": "aster-demo-logistics:promoter_post_pct:na",
+        "metric": "promoter_post_pct",
+        "label": "Promoter holding post-issue",
+        "value": 58.1,
+        "unit": "%",
+        "period": null,
+        "basis": "offer",
+        "kind": "reported",
+        "formula": null,
+        "inputs": [],
+        "source": {
+          "source_type": "SAMPLE",
+          "document_id": "sample",
+          "page": 92,
+          "table": "Shareholding Pattern",
+          "section": null,
+          "url": "sample://demo-document",
+          "sha256": null,
+          "tier": "primary"
+        },
+        "extraction": {
+          "method": "sample",
+          "extracted_at": "2026-10-05T08:00:00+05:30",
+          "extractor_version": "sample",
+          "confidence": "high"
+        },
+        "status": "ok",
+        "note": null,
+        "supersedes": null
+      },
+      "anchor_shares": {
+        "fact_id": "aster-demo-logistics:anchor_shares:na",
+        "metric": "anchor_shares",
+        "label": "Anchor investor shares",
+        "value": 10416666,
+        "unit": "shares",
+        "period": null,
+        "basis": "offer",
+        "kind": "reported",
+        "formula": null,
+        "inputs": [],
+        "source": {
+          "source_type": "SAMPLE",
+          "document_id": "sample",
+          "page": 1,
+          "table": "Anchor allocation",
+          "section": null,
+          "url": "sample://demo-document",
+          "sha256": null,
+          "tier": "primary"
+        },
+        "extraction": {
+          "method": "sample",
+          "extracted_at": "2026-10-05T08:00:00+05:30",
+          "extractor_version": "sample",
+          "confidence": "high"
+        },
+        "status": "ok",
+        "note": null,
+        "supersedes": null
+      },
+      "promoter_min_contribution_shares": {
+        "fact_id": "aster-demo-logistics:promoter_min_contribution_shares:na",
+        "metric": "promoter_min_contribution_shares",
+        "label": "Promoters' minimum contribution",
+        "value": 40000000,
+        "unit": "shares",
+        "period": null,
+        "basis": "offer",
+        "kind": "reported",
+        "formula": null,
+        "inputs": [],
+        "source": {
+          "source_type": "SAMPLE",
+          "document_id": "sample",
+          "page": 95,
+          "table": "Capital Structure",
+          "section": null,
+          "url": "sample://demo-document",
+          "sha256": null,
+          "tier": "primary"
+        },
+        "extraction": {
+          "method": "sample",
+          "extracted_at": "2026-10-05T08:00:00+05:30",
+          "extractor_version": "sample",
+          "confidence": "high"
+        },
+        "status": "ok",
+        "note": null,
+        "supersedes": null
+      },
+      "promoter_excess_shares": {
+        "fact_id": "aster-demo-logistics:promoter_excess_shares:na",
+        "metric": "promoter_excess_shares",
+        "label": "Promoter shares in excess of minimum",
+        "value": 76200000,
+        "unit": "shares",
+        "period": null,
+        "basis": "offer",
+        "kind": "reported",
+        "formula": null,
+        "inputs": [],
+        "source": {
+          "source_type": "SAMPLE",
+          "document_id": "sample",
+          "page": 95,
+          "table": "Capital Structure",
+          "section": null,
+          "url": "sample://demo-document",
+          "sha256": null,
+          "tier": "primary"
+        },
+        "extraction": {
+          "method": "sample",
+          "extracted_at": "2026-10-05T08:00:00+05:30",
+          "extractor_version": "sample",
+          "confidence": "high"
+        },
+        "status": "ok",
+        "note": null,
+        "supersedes": null
+      },
+      "pre_ipo_non_promoter_shares": {
+        "fact_id": "aster-demo-logistics:pre_ipo_non_promoter_shares:na",
+        "metric": "pre_ipo_non_promoter_shares",
+        "label": "Pre-IPO non-promoter shares",
+        "value": 31500000,
+        "unit": "shares",
+        "period": null,
+        "basis": "offer",
+        "kind": "reported",
+        "formula": null,
+        "inputs": [],
+        "source": {
+          "source_type": "SAMPLE",
+          "document_id": "sample",
+          "page": 96,
+          "table": "Capital Structure",
+          "section": null,
+          "url": "sample://demo-document",
+          "sha256": null,
+          "tier": "primary"
+        },
+        "extraction": {
+          "method": "sample",
+          "extracted_at": "2026-10-05T08:00:00+05:30",
+          "extractor_version": "sample",
+          "confidence": "high"
+        },
+        "status": "ok",
+        "note": null,
+        "supersedes": null
+      },
+      "objects_include_capex": {
+        "fact_id": "aster-demo-logistics:objects_include_capex:na",
+        "metric": "objects_include_capex",
+        "label": null,
+        "value": false,
+        "unit": "bool",
+        "period": null,
+        "basis": "offer",
+        "kind": "reported",
+        "formula": null,
+        "inputs": [],
+        "source": {
+          "source_type": "SAMPLE",
+          "document_id": "sample",
+          "page": 101,
+          "table": null,
+          "section": null,
+          "url": "sample://demo-document",
+          "sha256": null,
+          "tier": "primary"
+        },
+        "extraction": {
+          "method": "sample",
+          "extracted_at": "2026-10-05T08:00:00+05:30",
+          "extractor_version": "sample",
+          "confidence": "high"
+        },
+        "status": "ok",
+        "note": null,
+        "supersedes": null
+      }
+    },
+    "intermediaries": {
+      "brlms": [
+        "Demo Capital"
+      ],
+      "registrar": "Demo Registrar"
+    }
+  }
+]

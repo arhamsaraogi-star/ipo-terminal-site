@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "common.schema.json",
+  "title": "Shared definitions",
+  "$defs": {
+    "company_id": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+    "date": { "type": "string", "format": "date", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "datetime": { "type": "string", "format": "date-time" },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "source_type": {
+      "enum": ["DRHP", "RHP", "PROSPECTUS", "ADDENDUM", "ANCHOR_ALLOCATION", "BASIS_OF_ALLOTMENT",
+               "EXCHANGE_ANNOUNCEMENT", "EXCHANGE_ISSUE_PAGE", "SEBI_LISTING", "ANNUAL_REPORT",
+               "FINANCIAL_STATEMENTS", "SHAREHOLDING_PATTERN", "COMPANY_IR", "MEDIA", "THIRD_PARTY", "SAMPLE"]
+    },
+    "source": {
+      "type": "object",
+      "required": ["source_type", "url"],
+      "additionalProperties": false,
+      "properties": {
+        "source_type": { "$ref": "#/$defs/source_type" },
+        "document_id": { "type": ["string", "null"] },
+        "page": { "type": ["integer", "null"], "minimum": 1 },
+        "table": { "type": ["string", "null"] },
+        "section": { "type": ["string", "null"] },
+        "url": { "type": "string" },
+        "sha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+        "tier": { "enum": ["primary", "secondary"], "default": "primary" }
+      }
+    },
+    "extraction": {
+      "type": "object",
+      "required": ["method", "extracted_at"],
+      "additionalProperties": false,
+      "properties": {
+        "method": { "type": "string", "description": "e.g. table:pdfplumber, regex:industry, exchange:json, manual, sample" },
+        "extracted_at": { "$ref": "#/$defs/datetime" },
+        "extractor_version": { "type": ["string", "null"] },
+        "confidence": { "enum": ["high", "medium", "low"] }
+      }
+    },
+    "fact": {
+      "type": "object",
+      "description": "A single provenanced data point. Every material number in the terminal is a Fact.",
+      "required": ["fact_id", "metric", "value", "unit", "kind", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "fact_id": { "type": "string" },
+        "metric": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+        "label": { "type": ["string", "null"] },
+        "value": { "type": ["number", "string", "boolean", "null"] },
+        "unit": { "type": "string", "description": "INR crore | INR | shares | % | x | count | text | ..." },
+        "period": { "type": ["string", "null"], "description": "FY2026 | H1FY2027 | as_of:2026-09-30 | null" },
+        "basis": { "type": ["string", "null"], "description": "restated_consolidated | restated_standalone | offer | industry | ..." },
+        "kind": { "enum": ["reported", "calculated"] },
+        "formula": { "type": ["string", "null"] },
+        "inputs": { "type": "array", "items": { "type": "string" }, "description": "fact_ids used by a calculated fact" },
+        "source": { "oneOf": [{ "$ref": "#/$defs/source" }, { "type": "null" }] },
+        "extraction": { "oneOf": [{ "$ref": "#/$defs/extraction" }, { "type": "null" }] },
+        "status": { "enum": ["ok", "requires_review", "not_available", "not_meaningful", "superseded"] },
+        "note": { "type": ["string", "null"] },
+        "supersedes": { "type": ["string", "null"] }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "reported" }, "status": { "const": "ok" } } },
+          "then": { "required": ["source", "extraction"], "properties": { "source": { "type": "object" } } } },
+        { "if": { "properties": { "kind": { "const": "calculated" } } },
+          "then": { "required": ["formula", "inputs"] } }
+      ]
+    }
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "company.schema.json",
+  "title": "Company — the persistent object; IPOs are offerings/events attached to it",
+  "type": "object",
+  "required": ["company_id", "name", "segment", "lifecycle", "created_at", "updated_at"],
+  "additionalProperties": false,
+  "properties": {
+    "company_id": { "$ref": "common.schema.json#/$defs/company_id" },
+    "name": { "type": "string", "minLength": 2 },
+    "legal_name": { "type": ["string", "null"] },
+    "aliases": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "identifiers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cin": { "type": ["string", "null"], "pattern": "^[LU][0-9]{5}[A-Z]{2}[0-9]{4}[A-Z]{3}[0-9]{6}$" },
+        "isin": { "type": ["string", "null"], "pattern": "^INE[A-Z0-9]{9}$" },
+        "nse_symbol": { "type": ["string", "null"] },
+        "bse_code": { "type": ["string", "null"], "pattern": "^[0-9]{6}$" }
+      }
+    },
+    "sector": { "type": ["string", "null"] },
+    "industry": { "type": ["string", "null"] },
+    "segment": { "enum": ["MAINBOARD", "SME", "UNKNOWN"] },
+    "lifecycle": { "enum": ["PRIVATE", "DRHP_FILED", "SEBI_OBSERVED", "RHP_FILED", "ISSUE_ANNOUNCED", "ISSUE_OPEN", "ISSUE_CLOSED", "LISTED", "WITHDRAWN", "LAPSED"] },
+    "private_tracker": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "confidence": { "enum": ["CONFIRMED_FILING", "OFFICIAL_INDICATION", "CREDIBLE_REPORT", "UNCONFIRMED"] },
+        "expected_timing": { "type": ["string", "null"] },
+        "last_funding": { "$ref": "common.schema.json#/$defs/fact" },
+        "latest_valuation": { "$ref": "common.schema.json#/$defs/fact" },
+        "sources": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/source" } }
+      }
+    },
+    "overview": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "summary": { "type": "string" },
+        "segments": { "type": "array", "items": { "type": "string" } },
+        "source": { "$ref": "common.schema.json#/$defs/source" }
+      }
+    },
+    "website": { "type": ["string", "null"] },
+    "ir_url": { "type": ["string", "null"] },
+    "registered_office": { "type": ["string", "null"] },
+    "is_sample": { "type": "boolean", "default": false },
+    "created_at": { "$ref": "common.schema.json#/$defs/datetime" },
+    "updated_at": { "$ref": "common.schema.json#/$defs/datetime" }
+  }
+}

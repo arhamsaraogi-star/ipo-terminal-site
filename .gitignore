@@ -1,0 +1,10 @@
+node_modules/
+dist/
+src/web/public/vault.bin
+src/web/public/vault-meta.json
+__pycache__/
+*.pyc
+.pytest_cache/
+.env*
+*.pdf
+.DS_Store

@@ -1,0 +1,75 @@
+# SEBI ICDR lock-in rules, versioned by segment and effective date.
+# The engine selects the rule version in force on the ISSUE OPENING DATE.
+# Lock-in periods run from the DATE OF ALLOTMENT.
+#
+# verified: false  → the period has NOT yet been checked against the current regulation text.
+# The terminal shows an "unverified rule" badge on every tranche derived from an unverified rule.
+# Phase 7 deliverable: verify each entry against the ICDR text on sebi.gov.in and set verified: true
+# with the circular / notification reference.
+
+rules:
+  - rule_id: MB_ANCHOR_2023
+    segment: MAINBOARD
+    holder_category: ANCHOR
+    effective_from: 2023-04-01
+    effective_to: null
+    tranches:
+      - { share_of_holding: 0.5, period_days: 30 }
+      - { share_of_holding: 0.5, period_days: 90 }
+    reference: "ICDR Schedule XIII (as amended Jan 2022) — anchor lock-in 50% at 30 days, 50% at 90 days"
+    verified: false
+
+  - rule_id: MB_ANCHOR_PRE2023
+    segment: MAINBOARD
+    holder_category: ANCHOR
+    effective_from: 2018-09-11
+    effective_to: 2023-03-31
+    tranches:
+      - { share_of_holding: 1.0, period_days: 30 }
+    reference: "ICDR 2018 Schedule XIII — anchor lock-in 30 days"
+    verified: false
+
+  - rule_id: MB_PROMOTER_MIN_2021
+    segment: MAINBOARD
+    holder_category: PROMOTER_MIN_CONTRIBUTION
+    effective_from: 2021-08-13
+    effective_to: null
+    tranches:
+      - { share_of_holding: 1.0, period_months: 18 }
+    variants:
+      capex_objects: { period_months: 36, note: "Where objects include capital expenditure beyond the specified threshold" }
+    reference: "ICDR Reg 16(1)(a) as amended Aug 2021"
+    verified: false
+
+  - rule_id: MB_PROMOTER_EXCESS_2021
+    segment: MAINBOARD
+    holder_category: PROMOTER_EXCESS
+    effective_from: 2021-08-13
+    effective_to: null
+    tranches:
+      - { share_of_holding: 1.0, period_months: 6 }
+    variants:
+      capex_objects: { period_months: 12 }
+    reference: "ICDR Reg 16(1)(b) as amended Aug 2021"
+    verified: false
+
+  - rule_id: MB_PRE_IPO_2021
+    segment: MAINBOARD
+    holder_category: PRE_IPO_NON_PROMOTER
+    effective_from: 2021-08-13
+    effective_to: null
+    tranches:
+      - { share_of_holding: 1.0, period_months: 6 }
+    reference: "ICDR Reg 17 as amended Aug 2021 (exemptions apply, e.g. certain VCF/AIF holdings)"
+    verified: false
+
+  # SME rules were revised in 2024–25. Periods intentionally left blank until verified;
+  # tranches for SME issues are shown as "rule pending verification" with no expiry date.
+  - rule_id: SME_PENDING
+    segment: SME
+    holder_category: ANY
+    effective_from: 2024-01-01
+    effective_to: null
+    tranches: []
+    reference: "ICDR Chapter IX — to be encoded in Phase 7"
+    verified: false

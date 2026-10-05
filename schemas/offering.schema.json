@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "offering.schema.json",
+  "title": "Offering — an IPO / FPO / QIP / OFS of a company",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["offering_id", "company_id", "type", "segment", "facts"],
+    "additionalProperties": false,
+    "properties": {
+      "offering_id": { "type": "string" },
+      "company_id": { "$ref": "common.schema.json#/$defs/company_id" },
+      "type": { "enum": ["IPO", "FPO", "QIP", "OFS", "RIGHTS", "PREFERENTIAL"] },
+      "segment": { "enum": ["MAINBOARD", "SME", "UNKNOWN"] },
+      "exchanges": { "type": "array", "items": { "enum": ["NSE", "BSE", "NSE_EMERGE", "BSE_SME"] } },
+      "facts": {
+        "type": "object",
+        "description": "Keyed by metric: fresh_issue, ofs, total_issue, price_band_low, price_band_high, lot_size, face_value, pre_issue_shares, post_issue_shares, promoter_pre_pct, promoter_post_pct, anchor_portion, ...",
+        "additionalProperties": { "$ref": "common.schema.json#/$defs/fact" }
+      },
+      "intermediaries": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "brlms": { "type": "array", "items": { "type": "string" } },
+          "registrar": { "type": ["string", "null"] }
+        }
+      }
+    }
+  }
+}
