@@ -62,6 +62,33 @@
         "string",
         "null"
       ]
+    },
+    "industry_series": {
+      "type": "array",
+      "description": "Industry data series rebuilt from the offer document's charts/tables/statements, with page",
+      "items": {
+        "type": "object",
+        "required": [
+          "title",
+          "page",
+          "periods",
+          "rows"
+        ],
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "periods": {
+            "type": "array"
+          },
+          "rows": {
+            "type": "array"
+          }
+        }
+      }
     }
   }
 }

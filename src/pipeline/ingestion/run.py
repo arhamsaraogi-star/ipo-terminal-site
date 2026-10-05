@@ -279,7 +279,13 @@ def ingest_issues(st: State, nse: N.NSE, since: date, cal: Calendar, detail_budg
         seen.add(sym)
         segment = N.EQUITY_TYPES[series]
         name = r.get("company") or r.get("companyName") or sym
+        m_wd = re.search(r"\s*[-–]\s*(?:issue\s+)?(withdrawn|postponed|cancelled)\b.*$", name, re.I)
+        if m_wd:
+            name = name[:m_wd.start()].strip()
         b = st.company(name, symbol=sym, segment=segment, source="NSE-issues")
+        if m_wd:
+            b.company["issue_status"] = m_wd.group(1).lower()
+            b.company["name"] = re.sub(r"\s*[-–]\s*(?:issue\s+)?(withdrawn|postponed|cancelled)\b.*$", "", b.company["name"], flags=re.I)
         o = offering(b)
         exch = "NSE_EMERGE" if segment == "SME" else "NSE"
         if exch not in o["exchanges"]:
@@ -500,6 +506,8 @@ def update_market(st: State, client: Client) -> None:
 def lifecycle(b: CompanyBundle) -> str:
     if b.company["lifecycle"] == "WITHDRAWN" and not any(e["event_type"] == "ISSUE_OPEN" for e in b.events):
         return "WITHDRAWN"
+    if b.company.get("issue_status") in ("withdrawn", "cancelled", "postponed") and not any(e["event_type"] == "LISTING" and e["date"] <= TODAY.isoformat() for e in b.events):
+        return "WITHDRAWN"
     t = TODAY.isoformat()
     ev = {}
     for e in b.events:
@@ -689,7 +697,7 @@ def download(client: Client, url: str) -> bytes:
     raise SourceError(f"{url}: truncated download ({len(blob)} of {want} bytes)")
 
 
-DOC_VERSION = "doc/2"
+DOC_VERSION = "doc/3"
 DOC_ORDER = {"PROSPECTUS": 0, "RHP": 1, "UDRHP": 2, "DRHP": 3}
 
 
@@ -750,7 +758,7 @@ def extract_documents(st: State, client: Client, budget: int, minutes: float = 3
         apply_cover(b, d, e, sha)
         apply_body(b, d, body, sha)
         d["extraction"] = {"status": "ok", "extracted_at": now_ist(), "garbled": e["garbled"], "extractor": DOC_VERSION,
-                           "financial_values": len(body.financials), "peers": len(body.peers), "industry_claims": len(body.industry)}
+                           "financial_values": len(body.financials), "peers": len(body.peers), "industry_claims": len(body.industry), "industry_series": len(body.industry_series)}
         done += 1
     left = max(0, len(queue) - done - failed)
     st.log.append(f"Offer documents: {done} read (cover + financials + peers + industry), {failed} failed, {left} queued for next runs")
@@ -778,6 +786,9 @@ def apply_body(b: CompanyBundle, d: dict, r, sha: str) -> None:
         s_ = src(st_type, d["url"], page=c["page"], table="Industry overview", doc_id=d["document_id"])
         claims.append({**c, "source": s_})
     facts["industry_claims"] = claims or facts.get("industry_claims", [])
+    series = [{**x, "source": src(st_type, d["url"], page=x["page"], table=x["title"][:80], doc_id=d["document_id"])}
+              for x in (r.industry_series or [])]
+    facts["industry_series"] = series or facts.get("industry_series", [])
     facts["source_document"] = d["document_id"]
     b.facts = facts
     if r.pre_issue_shares:

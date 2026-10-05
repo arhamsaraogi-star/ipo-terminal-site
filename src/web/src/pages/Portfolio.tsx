@@ -1,9 +1,10 @@
 import { useState } from 'react'
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { usePf, useVault, go } from '../App'
 import { Card, Delta, Kpi, PageHead, Pill, Seg, Stage, Table } from '../components/ui'
 import { byId, cmp, holdingMarks, issuePrice, nextEvent, nextLockin } from '../lib/derive'
 import { crore, daysUntil, fmtDate, fmtDateTime, inr, urgency } from '../lib/format'
-import { exportPf, importPf } from '../lib/portfolio'
+import { TRACK, exportPf, importPf, xirr } from '../lib/portfolio'
 import type { CompanyRecord, Holding } from '../lib/types'
 
 const ROUTE: Record<string, string> = { PRE_IPO: 'Pre-IPO', ANCHOR: 'Anchor', ALLOTMENT: 'IPO allotment', MARKET: 'Market' }
@@ -15,6 +16,72 @@ export function positionValue(r: CompanyRecord, h: Holding) {
   return { cost_cr, value_cr, best, marks }
 }
 
+/** Whole-book returns: invested, marked value, gain, MOIC and money-weighted XIRR. */
+export function summary(v: ReturnType<typeof useVault>) {
+  const pos = v.portfolio.holdings.map(h => ({ h, r: byId(v, h.company_id) })).filter(x => x.r).map(x => ({ ...x, r: x.r!, ...positionValue(x.r!, x.h) }))
+  const priced = pos.filter(p => p.cost_cr != null)
+  const cost = priced.reduce((s, p) => s + p.cost_cr!, 0)
+  const value = priced.reduce((s, p) => s + (p.value_cr ?? p.cost_cr!), 0)
+  const today = new Date().toISOString().slice(0, 10)
+  const irr = xirr([...priced.map(p => ({ date: p.h.acquired_on, amount: -p.cost_cr! })), { date: today, amount: value }])
+  const unmarked = priced.filter(p => p.value_cr == null).length
+  return { pos, cost, value, gain: value - cost, moic: cost ? value / cost : null, irr, unmarked, missingCost: pos.length - priced.length }
+}
+
+export function ReturnsStrip() {
+  const v = useVault()
+  const S = summary(v)
+  return (
+    <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
+      <Kpi label="Invested" value={crore(S.cost, 1)} sub={`${S.pos.length} positions`} />
+      <Kpi label="Current value" value={crore(S.value, 1)} sub={S.unmarked ? `${S.unmarked} held at cost (no newer mark)` : 'marked to latest price / round'} />
+      <Kpi label="Gain" value={<span className={S.gain >= 0 ? 'pos' : 'neg'}>{S.gain >= 0 ? '+' : '−'}{crore(Math.abs(S.gain), 1)}</span>} sub={<Delta v={S.cost ? (S.value / S.cost - 1) * 100 : null} />} />
+      <Kpi label="Multiple (MOIC)" value={S.moic != null ? `${S.moic.toFixed(2)}x` : '—'} sub="value ÷ invested" />
+      <Kpi label="XIRR" value={<Delta v={S.irr} />} sub="money-weighted, annualised" />
+    </div>
+  )
+}
+
+export function ReturnsChart() {
+  const v = useVault()
+  const S = summary(v)
+  const data = S.pos.filter(p => p.cost_cr != null).map(p => ({ n: p.r.company.name.replace(/ (Private )?Limited$/i, '').slice(0, 22), Cost: +p.cost_cr!.toFixed(2), Value: +(p.value_cr ?? p.cost_cr!).toFixed(2) }))
+    .sort((a, b) => b.Value - a.Value).slice(0, 12)
+  if (!data.length) return null
+  return (
+    <Card title="Cost vs current value (₹ cr)" solid>
+      <div style={{ height: Math.max(160, data.length * 42) }}>
+        <ResponsiveContainer>
+          <BarChart data={data} layout="vertical" margin={{ left: 8, right: 24 }} barGap={2}>
+            <CartesianGrid stroke="var(--hairline)" horizontal={false} />
+            <XAxis type="number" tick={{ fill: 'var(--ink-3)', fontSize: 11 }} axisLine={false} tickLine={false} />
+            <YAxis type="category" dataKey="n" width={140} tick={{ fill: 'var(--ink-2)', fontSize: 12 }} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={{ background: 'var(--glass-solid)', border: '1px solid var(--hairline)', borderRadius: 12 }} formatter={(x, n) => [crore(Number(x), 2), n]} cursor={{ fill: 'var(--hairline)' }} />
+            <Legend wrapperStyle={{ fontSize: 12 }} />
+            <Bar dataKey="Cost" fill="#8a93a6" radius={[0, 4, 4, 0]} maxBarSize={14} />
+            <Bar dataKey="Value" fill="#3987e5" radius={[0, 4, 4, 0]} maxBarSize={14} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </Card>
+  )
+}
+
+export function TrackingTable({ limit }: { limit?: number }) {
+  const v = useVault()
+  const rows = v.portfolio.tracking.map(t => ({ t, r: byId(v, t.company_id) })).filter(x => x.r).map(x => ({ ...x, r: x.r! }))
+    .sort((a, b) => (b.t.updated_on ?? b.t.added_on).localeCompare(a.t.updated_on ?? a.t.added_on)).slice(0, limit ?? 999)
+  return <Table rows={rows} empty="Nothing tracked yet — press ◎ Track on any company (IPO, DRHP, listed or your own private company)."
+    onRow={x => go(`/company/${x.r.company.company_id}`)} cols={[
+      { key: 'c', label: 'Company', render: x => <div><b>{x.r.company.name}</b>{x.t.note && <div className="muted text-xs line-clamp-1">{x.t.note}</div>}</div>, sort: x => x.r.company.name },
+      { key: 's', label: 'Status', render: x => <Pill tone={TRACK[x.t.status].tone}>{TRACK[x.t.status].label}</Pill>, sort: x => x.t.status },
+      { key: 'st', label: 'Stage', render: x => x.r.custom ? <Pill tone="violet">Private</Pill> : <Stage s={x.r.company.lifecycle} /> },
+      { key: 'ne', label: 'Next / latest', render: x => { const e = nextEvent(x.r); const n = x.r.news[0]
+        return e ? <span className="text-sm">{v.event_types[e.event_type]?.label ?? e.event_type} · <b>{fmtDate(e.date, false)}</b></span> : n ? <span className="text-sm ink2 line-clamp-1">{n.title}</span> : <span className="muted">—</span> } },
+      { key: 'p', label: 'Price', right: true, hideMobile: true, render: x => cmp(x.r) ? inr(cmp(x.r), 2) : issuePrice(x.r) ? `${inr(issuePrice(x.r))} issue` : '—' },
+    ]} />
+}
+
 export function HoldingsTable() {
   const v = useVault()
   const rows = v.portfolio.holdings.map(h => ({ h, r: byId(v, h.company_id)! })).filter(x => x.r).map(x => ({ ...x, ...positionValue(x.r, x.h) }))
@@ -22,9 +89,9 @@ export function HoldingsTable() {
     onRow={x => go(`/company/${x.r.company.company_id}`)} initialSort={{ key: 'val', dir: -1 }}
     cols={[
       { key: 'c', label: 'Company', sort: x => x.r.company.name, render: x => <div><b>{x.r.company.name}</b><div className="muted text-xs">{ROUTE[x.h.route] ?? x.h.route} · since {fmtDate(x.h.acquired_on)}</div></div> },
-      { key: 's', label: 'Stage', render: x => <Stage s={x.r.company.lifecycle} /> },
+      { key: 's', label: 'Stage', render: x => x.r.custom ? <Pill tone="violet">Private · {x.r.custom.country}</Pill> : <Stage s={x.r.company.lifecycle} /> },
       { key: 'cost', label: 'Cost', right: true, render: x => crore(x.cost_cr, 2), sort: x => x.cost_cr },
-      { key: 'mark', label: 'Latest mark', right: true, render: x => x.best ? <span>{x.best.perShare != null ? inr(x.best.perShare, 2) : crore(x.best.value_cr)}<div className="muted text-xs">{x.best.label}</div></span> : <span className="muted">no mark yet</span> },
+      { key: 'mark', label: 'Latest mark', right: true, render: x => x.best ? <span>{x.best.text ?? (x.best.perShare != null ? inr(x.best.perShare, 2) : crore(x.best.value_cr))}<div className="muted text-xs">{x.best.label}</div></span> : <span className="muted">held at cost</span> },
       { key: 'val', label: 'Value', right: true, render: x => crore(x.value_cr, 2), sort: x => x.value_cr },
       { key: 'mult', label: 'Multiple', right: true, render: x => x.best?.multiple != null ? <b className={x.best.multiple >= 1 ? 'pos' : 'neg'}>{x.best.multiple.toFixed(2)}x</b> : '—', sort: x => x.best?.multiple ?? null },
       { key: 'cagr', label: 'CAGR', right: true, render: x => <Delta v={x.best?.cagr} />, sort: x => x.best?.cagr ?? null, hideMobile: true },
@@ -58,7 +125,7 @@ function PortfolioIO() {
   const [msg, setMsg] = useState('')
   return (
     <div className="glass panel p-4 flex flex-wrap items-center gap-3 text-sm">
-      <span className="ink2">Holdings and watchlist are stored privately in this browser — never on GitHub.</span>
+      <span className="ink2">Your portfolio, tracking list and private companies sync to your login (encrypted) and are cached in this browser.</span>
       <button className="btn" onClick={() => exportPf(pf)}>Export</button>
       <label className="btn cursor-pointer">Import<input type="file" accept="application/json" className="hidden"
         onChange={async e => { const f = e.target.files?.[0]; if (!f) return; try { setPf(await importPf(f)); setMsg('Imported') } catch (x) { setMsg((x as Error).message) } }} /></label>
@@ -71,25 +138,19 @@ export default function Portfolio() {
   const v = useVault()
   const [tier, setTier] = useState<'all' | 'official' | 'media'>('all')
   const held = new Set(v.portfolio.holdings.map(h => h.company_id))
-  const pos = v.portfolio.holdings.map(h => ({ h, r: byId(v, h.company_id) })).filter(x => x.r).map(x => positionValue(x.r!, x.h))
-  const cost = pos.reduce((s, p) => s + (p.cost_cr ?? 0), 0)
-  const value = pos.reduce((s, p) => s + (p.value_cr ?? p.cost_cr ?? 0), 0)
   const news = v.companies.filter(r => held.has(r.company.company_id))
     .flatMap(r => r.news.map(n => ({ n, r })))
     .filter(x => tier === 'all' || x.n.tier === tier)
     .sort((a, b) => b.n.published_at.localeCompare(a.n.published_at))
-  const watch = v.portfolio.watchlist.map(id => byId(v, id)).filter(Boolean) as CompanyRecord[]
   return (
     <div className="space-y-5">
-      <PageHead title="Portfolio" sub="Pre-IPO, anchor and listed positions — marked to the latest private round, the IPO price and the market." action={<a className="btn btn-primary" href="#/pipeline">+ Add from pipeline</a>} />
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        <Kpi label="Positions" value={pos.length} sub={`${v.portfolio.watchlist.length} on watchlist`} />
-        <Kpi label="Cost" value={crore(cost, 1)} />
-        <Kpi label="Marked value" value={crore(value, 1)} />
-        <Kpi label="Gain" value={<Delta v={cost ? (value / cost - 1) * 100 : null} />} sub={cost ? `${crore(value - cost, 1)}` : undefined} />
-      </div>
+      <PageHead title="Portfolio" sub="Pre-IPO, anchor, listed and private positions — marked to the latest round, the IPO price and the market."
+        action={<div className="flex gap-2 flex-wrap"><a className="btn btn-primary" href="#/new-private/">+ Private company</a><a className="btn" href="#/ipos/pipeline">+ From IPO pipeline</a></div>} />
+      <ReturnsStrip />
       <Card title="Holdings"><HoldingsTable /></Card>
+      <ReturnsChart />
       <MarksTable />
+      <Card title="Tracking" solid><TrackingTable /></Card>
       <Card title="Every announcement on my holdings" action={<Seg value={tier} onChange={setTier} options={[{ v: 'all', label: 'All' }, { v: 'official', label: 'Exchange' }, { v: 'media', label: 'Media' }]} />} solid>
         <Table rows={news} empty="No announcements yet" search={x => `${x.r.company.name} ${x.n.title}`} cols={[
           { key: 't', label: 'Time', render: x => fmtDateTime(x.n.published_at), sort: x => x.n.published_at },
@@ -97,16 +158,8 @@ export default function Portfolio() {
           { key: 'cat', label: 'Type', render: x => <Pill tone={x.n.tier === 'official' ? 'blue' : 'slate'}>{x.n.category.replace(/_/g, ' ')}</Pill> },
         ]} />
       </Card>
-      <Card title="Watchlist" solid>
-        <Table rows={watch} onRow={r => go(`/company/${r.company.company_id}`)} empty="Nothing on the watchlist" cols={[
-          { key: 'c', label: 'Company', render: r => <b>{r.company.name}</b> },
-          { key: 's', label: 'Stage', render: r => <Stage s={r.company.lifecycle} /> },
-          { key: 'p', label: 'Price', right: true, render: r => cmp(r) ? inr(cmp(r), 2) : issuePrice(r) ? `${inr(issuePrice(r))} issue` : '—' },
-          { key: 'e', label: 'Next event', render: r => { const e = nextEvent(r); return e ? `${v.event_types[e.event_type]?.label} · ${fmtDate(e.date, false)}` : '—' } },
-        ]} />
-      </Card>
       <PortfolioIO />
-      <p className="muted text-xs">Multiples use the most recent available mark. CAGR is annualised from your investment date.</p>
+      <p className="muted text-xs">Multiples use the most recent mark. XIRR treats each position's cost as invested on its date and today's marked value as the exit; positions without a later mark are held at cost. Foreign-currency private companies convert at the rate you entered.</p>
     </div>
   )
 }

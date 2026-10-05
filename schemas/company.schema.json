@@ -209,6 +209,13 @@
       "items": {
         "type": "string"
       }
+    },
+    "issue_status": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "withdrawn / postponed / cancelled when the exchange marks the issue so"
     }
   }
 }

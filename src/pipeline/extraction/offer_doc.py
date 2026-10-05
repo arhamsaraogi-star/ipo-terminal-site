@@ -81,6 +81,7 @@ class Result:
     pre_issue_shares: int | None = None
     pre_issue_page: int | None = None
     industry: list[dict] = field(default_factory=list)
+    industry_series: list[dict] = field(default_factory=list)
     periods: list[str] = field(default_factory=list)
 
 
@@ -561,4 +562,12 @@ def extract(pdf: bytes) -> Result:
     res.peers, res.peers_page = scan_peers(pages_text, doc)
     res.pre_issue_shares, res.pre_issue_page = scan_pre_issue_shares(pages_text)
     res.industry = scan_industry(pages_text)
+    try:
+        from .industry_series import scan as scan_series
+        st = next((i for i, t in enumerate(pages_text) if i > 10 and IND_START.search(t)), None)
+        if st is not None:
+            en = next((j for j in range(st + 1, min(len(pages_text), st + 90)) if IND_END.search(pages_text[j])), min(len(pages_text), st + 60))
+            res.industry_series = scan_series(doc, st, en)
+    except Exception:
+        res.industry_series = []
     return res

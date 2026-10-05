@@ -62,7 +62,7 @@ CELL = re.compile(
 
 
 def parse_offer(flat: str) -> dict:
-    m = re.search(r"DETAILS OF THE (?:OFFER|ISSUE)(?: TO THE PUBLIC)?(.*?)(?:DETAILS OF THE (?:SELLING|OFFER FOR SALE|PROMOTER SELLING)|RISKS? IN RELATION|NAME OF THE SELLING)", flat, re.S | re.I)
+    m = re.search(r"DETAILS OF (?:THE )?(?:OFFER|ISSUE)(?: TO THE PUBLIC)?(.*?)(?:DETAILS OF THE (?:TOP \d+ )?(?:SELLING|OFFER FOR SALE|PROMOTER SELLING)|RISKS? IN RELATION|NAME OF THE SELLING)", flat, re.S | re.I)
     if not m:
         return {}
     block = m.group(1)
@@ -107,12 +107,53 @@ def _is_header(l: str) -> bool:
     return "@" not in l and not re.search(r"\d", l) and all(w.strip(",:") in HEADER_WORDS for w in l.upper().split())
 
 
+NAME_SPLIT = re.compile(r"^(.*?\b(?:Private Limited|Pvt\.? Ltd\.?|Limited|LLP|Ltd\.?))(\s*\((?:formerly|earlier|previously)[^)]*\)?)?\s*[&*#^]*\s*(.*)$", re.I | re.S)
+EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+
+
+def _parties_by_email(lines: list[str]) -> list[dict]:
+    """Each party's block ends with its e-mail line: robust to names wrapping over lines or carrying '(formerly …)'."""
+    parties: list[dict] = []
+    block: list[str] = []
+    phone = None
+    for l in lines:
+        if re.match(r"^(Tel|Telephone|Phone|Mob)", l, re.I):
+            ph = re.sub(r"^(Tel|Telephone|Phone|Mob)[^:]*:\s*", "", l, flags=re.I)
+            if block:
+                phone = ph
+            elif parties and not parties[-1].get("phone"):
+                parties[-1]["phone"] = ph
+            continue
+        em = EMAIL.search(l)
+        if em:
+            text = _flat(" ".join(x for x in block if not re.match(r"^(Website|Investor grievance|SEBI Reg|Registration)", x, re.I)))
+            m = NAME_SPLIT.match(text)
+            if m and len(m.group(1)) > 5:
+                name = _flat(m.group(1) + (m.group(2) or "")).strip()
+                if name.count("(") > name.count(")"):
+                    name += ")"
+                p = {"name": name, "email": em.group(0)}
+                cp = _flat(m.group(3)).strip(" /&*#")
+                if cp and not re.search(r"\d", cp):
+                    p["contact_person"] = cp
+                if phone:
+                    p["phone"] = phone
+                parties.append(p)
+            block, phone = [], None
+            continue
+        block.append(l)
+    return parties
+
+
 def parse_parties(text: str, start_pat: str, end_pat: str) -> list[dict]:
     m = re.search(start_pat + r"(.*?)" + end_pat, text, re.S)
     if not m:
         return []
     lines = [l.strip() for l in m.group(1).splitlines() if l.strip()]
     lines = [l for l in lines if not _is_header(l)]
+    by_email = _parties_by_email(lines)
+    if by_email:
+        return by_email[:12]
     parties: list[dict] = []
     buf: list[str] = []
     for l in lines:
@@ -151,9 +192,9 @@ def extract(pages: list[str]) -> dict:
         out["cin"] = m.group(1)
     if m := re.search(r"\b(www\.[a-z0-9.-]+\.[a-z]{2,})", flat, re.I):
         out["website"] = m.group(1).lower()
-    if m := re.search(r"OUR PROMOTERS?\s*(?:IS|ARE|:)?\s*:?\s*(.*?)\s*(?:DETAILS OF THE|OFFER DETAILS|THE OFFER)", flat, re.S):
+    if m := re.search(r"OUR PROMOTERS?\s*(?:IS|ARE|:)?\s*:?\s*(.*?)\s*(?:DETAILS OF (?:THE )?(?:OFFER|ISSUE)|DETAILS OF THE|OFFER DETAILS|THE OFFER|TYPE OF (?:OFFER|ISSUE))", flat, re.S):
         names = re.split(r",\s*|\s+AND\s+", m.group(1).strip(" .:"))
-        out["promoters"] = [n.strip(" .").title() for n in names if 2 < len(n.strip()) < 80][:12]
+        out["promoters"] = [n.strip(" .").title() for n in names if 2 < len(n.strip()) < 80 and not re.search(r"\d|investor|see |page", n, re.I)][:12]
     out.update(parse_offer(flat))
     if m := re.search(r"Regulation\s*6\s*\(\s*([12])\s*\)", flat):
         out["regulation"] = f"6({m.group(1)})"

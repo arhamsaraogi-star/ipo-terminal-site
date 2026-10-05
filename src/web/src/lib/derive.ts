@@ -1,3 +1,4 @@
+import { fmtCur, toCr } from './portfolio'
 // Pure selectors over the vault. No research content lives in components — only here and in data/.
 import { daysUntil, fv, isoToday } from './format'
 import type { CompanyRecord, Event, Fact, Lockin, Vault } from './types'
@@ -129,9 +130,10 @@ export function valuationInputs(r: CompanyRecord) {
 }
 
 // ───────── portfolio marks (listed and pre-IPO) ─────────
-export interface Mark { label: string; date: string | null; value_cr: number | null; perShare: number | null; multiple: number | null; cagr: number | null }
+export interface Mark { label: string; date: string | null; value_cr: number | null; perShare: number | null; multiple: number | null; cagr: number | null; text?: string }
 export function holdingMarks(r: CompanyRecord, h: import('./types').Holding): { cost_cr: number | null; marks: Mark[] } {
   const qty = h.quantity || 0
+  if (r.custom) return customMarks(r.custom, h)
   const cost_cr = h.invested_cr ?? (qty && h.avg_cost ? (qty * h.avg_cost) / 1e7 : null)
   const entryVal = h.entry_valuation_cr ?? null
   const marks: Mark[] = []
@@ -148,6 +150,26 @@ export function holdingMarks(r: CompanyRecord, h: import('./types').Holding): { 
   if (ip) add('IPO issue price', eventDate(r, 'BASIS_OF_ALLOTMENT') ?? eventDate(r, 'ISSUE_CLOSE'), mcapAtIssue(r), ip)
   const c = cmp(r)
   if (c) add('Market price', quote(r)?.date ?? null, mcapNow(r), c)
+  return { cost_cr, marks }
+}
+
+/** Your own private company: marks come from the rounds you entered (same currency as your entry valuation). */
+function customMarks(p: import('./types').PrivateCo, h: import('./types').Holding): { cost_cr: number | null; marks: Mark[] } {
+  const cur = p.currency || 'INR'
+  const qty = h.quantity || 0
+  const invested = h.invested_cr ?? (qty && h.avg_cost ? (cur === 'INR' ? (qty * h.avg_cost) / 1e7 : (qty * h.avg_cost) / 1e6) : null)
+  const cost_cr = toCr(invested, cur, p.fx_inr)
+  const years = (d: string | null) => d ? Math.max((Date.parse(d) - Date.parse(h.acquired_on)) / (365.25 * 864e5), 1 / 365) : null
+  const marks: Mark[] = []
+  for (const rd of [...p.rounds].sort((a, b) => a.date.localeCompare(b.date))) {
+    if (rd.date < h.acquired_on) continue
+    let multiple: number | null = null
+    if (rd.price_per_share && h.avg_cost) multiple = rd.price_per_share / h.avg_cost
+    else if (rd.post_money && h.entry_valuation_cr) multiple = rd.post_money / h.entry_valuation_cr
+    const y = years(rd.date)
+    marks.push({ label: rd.label || 'Round', date: rd.date, value_cr: toCr(rd.post_money, cur, p.fx_inr), perShare: rd.price_per_share ?? null, multiple,
+      cagr: multiple != null && y && y >= 0.25 ? (Math.pow(multiple, 1 / y) - 1) * 100 : null, text: rd.post_money != null ? `${fmtCur(rd.post_money, cur)} val.` : undefined })
+  }
   return { cost_cr, marks }
 }
 

@@ -142,7 +142,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"ok: {payload['meta']['companies']} companies, {len(report.warnings)} warning(s)")
     if a.changed_flag:
         import hashlib, json as _j
-        body = {**payload, "meta": {k: v for k, v in payload["meta"].items() if k not in ("built_at", "ingest")}}
+        body = {**payload, "meta": {k: v for k, v in payload["meta"].items() if k not in ("built_at", "ingest")},
+                "auth": hashlib.sha256((os.environ.get("TERMINAL_USERS", "") + "|" + os.environ.get("SYNC_TOKEN", "")).encode()).hexdigest()}
         h = hashlib.sha256(_j.dumps(body, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
         hp = DATA / "index" / "payload_hash"
         changed = not hp.exists() or hp.read_text().strip() != h
@@ -153,16 +154,27 @@ def main(argv: list[str] | None = None) -> int:
     if a.check or not a.out:
         return 0
 
-    pw = os.environ.get("TERMINAL_PASSPHRASE", "")
-    if not pw:
-        print("ERROR TERMINAL_PASSPHRASE is not set — refusing to build an unencrypted site")
+    from pipeline.build.vault import ITERATIONS, parse_users, seal_v2
+    users_txt = os.environ.get("TERMINAL_USERS", "").strip()
+    legacy = os.environ.get("TERMINAL_PASSPHRASE", "")
+    if not users_txt and not legacy:
+        print("ERROR neither TERMINAL_USERS nor TERMINAL_PASSPHRASE is set — refusing to build an unencrypted site")
         return 1
-    from pipeline.build.vault import ITERATIONS, seal
+    try:
+        users = parse_users(users_txt) if users_txt else [("admin", legacy)]   # transition: log in as "admin" + old password
+    except ValueError as e:
+        print(f"ERROR TERMINAL_USERS: {e}")
+        return 1
     cfg = read_json(ROOT / "config" / "vault.json", {})
-    payload["meta"]["repo"] = os.environ.get("GITHUB_REPOSITORY") or cfg.get("repo")
+    repo = os.environ.get("GITHUB_REPOSITORY") or cfg.get("repo")
+    payload["meta"]["repo"] = repo
+    payload["meta"]["users"] = len(users)
+    token = os.environ.get("SYNC_TOKEN", "").strip()
+    payload["sync"] = {"repo": repo, "branch": "userdata", "token": token} if token and repo else None
     a.out.parent.mkdir(parents=True, exist_ok=True)
-    a.out.write_bytes(seal(payload, pw, cfg.get("iterations", ITERATIONS), bytes.fromhex(cfg["salt"]) if cfg.get("salt") else None))
-    write_json(a.out.with_name("vault-meta.json"), {"built_at": payload["meta"]["built_at"], "format": "IPOV1"})
+    salt = bytes.fromhex(cfg["salt"]) if cfg.get("salt") else os.urandom(16)
+    a.out.write_bytes(seal_v2(payload, users, salt, cfg.get("iterations", ITERATIONS)))
+    write_json(a.out.with_name("vault-meta.json"), {"built_at": payload["meta"]["built_at"], "format": "IPOV2", "sync": bool(payload["sync"])})
     print(f"vault written: {a.out} ({a.out.stat().st_size:,} bytes)")
     return 0
 

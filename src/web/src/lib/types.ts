@@ -15,7 +15,7 @@ export type Lifecycle = 'PRIVATE' | 'DRHP_FILED' | 'SEBI_OBSERVED' | 'RHP_FILED'
 export interface Company {
   company_id: string; name: string; legal_name?: string | null; aliases: string[]
   identifiers: { cin?: string | null; isin?: string | null; nse_symbol?: string | null; bse_code?: string | null }
-  sector?: string | null; industry?: string | null; segment: 'MAINBOARD' | 'SME' | 'UNKNOWN'; lifecycle: Lifecycle
+  sector?: string | null; industry?: string | null; segment: 'MAINBOARD' | 'SME' | 'UNKNOWN' | 'PRIVATE'; lifecycle: Lifecycle
   private_tracker?: { confidence: string; expected_timing?: string | null; sources?: Source[] } | null
   overview?: { summary: string; segments?: string[]; source?: Source } | null
   website?: string | null; ir_url?: string | null; is_sample?: boolean; updated_at: string
@@ -54,23 +54,33 @@ export interface Holding {
   invested_cr?: number | null                 // pre-IPO: amount invested (when quantity/price unknown)
   latest_round_cr?: number | null             // latest private round valuation (manual)
   latest_round_on?: string | null
+  currency?: string | null                    // private companies: amounts in this currency (crore for INR, million otherwise)
+}
+export type TrackStatus = 'INTERESTED' | 'EVALUATING' | 'IN_TALKS' | 'COMMITTED' | 'PASSED'
+export interface Track { company_id: string; status: TrackStatus; note?: string | null; added_on: string; updated_on?: string }
+export interface Round { date: string; label: string; post_money: number | null; price_per_share?: number | null; lead?: string | null }
+export interface PrivateCo {
+  company_id: string; name: string; country: string; sector?: string | null; currency: string; fx_inr?: number | null
+  website?: string | null; note?: string | null; rounds: Round[]; created_on: string
 }
 export interface Peer { name: string; face_value?: number | null; price?: number | null; total_income?: number | null; mcap?: number | null
   pb?: number | null; pe?: number | null; eps_basic?: number | null; ronw?: number | null; nav?: number | null; source?: Source }
 export interface IndustryClaim { text: string; page: number; cagr_pct?: number | null; amounts?: { value: number; unit: string }[]; years?: string[]; source?: Source }
+export interface IndustrySeries { title: string; unit?: string | null; page: number; kind: 'chart' | 'table' | 'text'; periods: string[]; projected?: boolean[]; rows: { name: string; values: (number | null)[] }[]; note?: string | null; macro?: boolean; source?: Source }
 export interface Quote { date: string; close: number; prev_close?: number | null; open?: number | null; high?: number | null; low?: number | null
   shares?: number | null; mcap_cr?: number | null; series?: string; volume?: number | null }
 export interface Market { symbol: string; quote?: Quote | null; listing?: { date: string; open?: number | null; high?: number | null; low?: number | null; close?: number | null; prev_close?: number | null } | null
   history: [string, number][]; source: string }
 export interface CompanyRecord {
   company: Company; offerings: Offering[]
-  facts: { financials: Fact[]; industry: Fact[]; operating?: Fact[]; peers?: Peer[]; industry_claims?: IndustryClaim[]; source_document?: string | null } | null
+  facts: { financials: Fact[]; industry: Fact[]; operating?: Fact[]; peers?: Peer[]; industry_claims?: IndustryClaim[]; industry_series?: IndustrySeries[]; source_document?: string | null } | null
   documents: Doc[]; events: Event[]; lockins: Lockin[]; news: News[]; market?: Market | null
+  custom?: PrivateCo
 }
 export interface Vault {
   meta: { built_at: string; schema_version: number; companies: number; has_sample: boolean; repo?: string | null
     ingest?: { ran_at: string; companies: number; changes: number; log: string[]; failures: string[] } | null }
   event_types: Record<string, { label: string; group: string; order: number }>
   companies: CompanyRecord[]; changes: Change[]
-  portfolio: { holdings: Holding[]; watchlist: string[] }; review: string[]; redirects?: Record<string, string>
+  portfolio: { holdings: Holding[]; watchlist: string[]; tracking: Track[]; privates: PrivateCo[] }; review: string[]; redirects?: Record<string, string>
 }

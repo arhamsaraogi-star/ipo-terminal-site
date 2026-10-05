@@ -46,19 +46,23 @@ cd src/web && npm install && npm run dev                       # http://localhos
 npm test && npm run build
 ```
 
-## How the password works
+## Sign-in, users and cross-device memory
 
-1. The passphrase exists only as the GitHub Actions secret `TERMINAL_PASSPHRASE` (and in your head).
-2. `refresh.yml` compiles all data into one JSON → gzip → AES-256-GCM, with the key derived by PBKDF2-SHA-256 (600k iterations) → `vault.bin`.
-3. The public site gets `vault.bin` plus a generic app shell. No company names, figures or routes are present in plaintext. The deploy step fails if any are.
-4. The browser derives the key from what you type and decrypts in memory. "Remember this device" stores a *non-extractable* key (never the password) in IndexedDB. **Lock** wipes it.
-5. To rotate: change the secret, run `python scripts/rotate_salt.py`, commit, deploy.
+* **Users** live only in the repo secret `TERMINAL_USERS` — one `username:password` per line (password ≥ 8 chars).
+  Nothing about users is in the code; the published vault holds only salted hashes of usernames and per-user wrapped keys
+  (format `IPOV2`, see `src/pipeline/build/vault.py`). Until `TERMINAL_USERS` exists you sign in as `admin` with the old passphrase.
+* **Cross-device memory**: portfolio, tracking list and private companies are encrypted in the browser with a key derived from
+  your password and saved to `users/<hash>.bin` on the `userdata` branch. Needs the repo secret `SYNC_TOKEN` — a fine-grained
+  GitHub token with *Contents: read & write* on this repository only. The token is shipped inside the encrypted vault, so only
+  signed-in users can use it. Without it, data stays on each device.
+* `TERMINAL_PASSPHRASE` remains the internal key for the encrypted pipeline state branch — keep it.
+* After changing either secret, run **Actions → Refresh → Run workflow** to rebuild the site.
 
-Use a long passphrase (5+ random words). Anyone can download the encrypted file and try passwords offline, so the length of the passphrase is the protection.
+## Portfolio, tracking & private companies
 
-## Portfolio & watchlist
-
-**★ Add to portfolio** / **☆ Watch** on a company page saves to this browser only (never to GitHub, because the repo is public). Portfolio → Export / Import moves them between devices. Exchange announcements are pulled for every listed company, so every holding's news is tracked regardless.
+* ★ **Add to portfolio** on any company (pre-IPO with entry valuation, anchor, allotment, market). Returns: MOIC, XIRR, CAGR.
+* ◎ **Track** any company with a status (Interested → Evaluating → In talks with BRLM → Committed / Passed) and a note.
+* **+ Private company** adds any unlisted company in the world (any currency, FX to ₹), its funding rounds and your position.
 
 ## Adding a new event type / source
 

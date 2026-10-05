@@ -24,6 +24,7 @@ class Client:
         self.s = requests.Session()
         self.s.headers.update({"User-Agent": UA, "Accept-Language": "en-IN,en;q=0.9"})
         self.min_interval, self.retries, self.timeout = min_interval, retries, timeout
+        self.deadline = 150.0
         self._last: dict[str, float] = {}
         self._warmed: set[str] = set()
 
@@ -40,13 +41,32 @@ class Client:
         self.request("GET", url, warm=False)
         self._warmed.add(host)
 
+    def _guarded(self, method: str, url: str, **kw) -> requests.Response:
+        """Hard wall-clock deadline per request: a server trickling bytes defeats socket read timeouts."""
+        import signal
+        import threading
+        if threading.current_thread() is not threading.main_thread() or not hasattr(signal, "setitimer"):
+            return self.s.request(method, url, timeout=self.timeout, **kw)
+
+        def boom(*_):
+            raise requests.Timeout(f"hard deadline exceeded for {url[:80]}")
+        old = signal.signal(signal.SIGALRM, boom)
+        signal.setitimer(signal.ITIMER_REAL, self.deadline)
+        try:
+            r = self.s.request(method, url, timeout=self.timeout, **kw)
+            _ = r.content                                   # read the body inside the deadline
+            return r
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, old)
+
     def request(self, method: str, url: str, *, warm: bool = False, **kw) -> requests.Response:
         host = urlparse(url).netloc
         last_err: Exception | None = None
         for attempt in range(self.retries):
             self._pace(host)
             try:
-                r = self.s.request(method, url, timeout=self.timeout, **kw)
+                r = self._guarded(method, url, **kw)
                 if r.status_code == 200 and b"Unauthorized Activity Has Been Detected" not in r.content[:4000]:
                     return r
                 last_err = SourceError(f"{method} {url} -> HTTP {r.status_code}")

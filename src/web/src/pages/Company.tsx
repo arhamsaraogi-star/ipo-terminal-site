@@ -9,9 +9,12 @@ import {
 import { crore, daysUntil, fmtDate, fmtDateTime, fv, humanize, inr, num, pct, shares, urgency } from '../lib/format'
 import type { CompanyRecord, Fact, Holding } from '../lib/types'
 import { holder } from './Dashboard'
+import { PrivateView } from './PrivateCo'
+import { TrackButton } from '../components/Track'
+import { IndustryCharts } from '../components/IndustryCharts'
 import { brlms, dealSize, filedOn } from './AnchorDesk'
 
-const TABS = ['Overview', 'Financials', 'Valuation', 'Industry', 'IPO', 'Timeline', 'Lock-ins', 'Documents', 'News'] as const
+const TABS = ['Overview', 'Financials', 'Valuation', 'Industry', 'IPO & lock-ins', 'Filings & news'] as const
 type Tab = typeof TABS[number]
 
 export default function CompanyPage({ id }: { id: string }) {
@@ -20,10 +23,11 @@ export default function CompanyPage({ id }: { id: string }) {
   const [tab, setTab] = useState<Tab>('Overview')
   const [form, setForm] = useState(false)
   const r = byId(v, v.redirects?.[id] ?? id)
-  if (!r) return <div className="glass p-10">Company not found. <a href="#/pipeline">Back to pipeline</a></div>
+  if (!r) return <div className="glass p-10">Company not found. <a href="#/ipos/pipeline">Back to pipeline</a></div>
+  if (r.custom) return <PrivateView r={r} />
   const c = r.company
   const cid = c.company_id
-  const held = isHeld(v, cid), watched = isWatched(v, cid)
+  const held = isHeld(v, cid)
 
   return (
     <div className="space-y-5">
@@ -42,7 +46,7 @@ export default function CompanyPage({ id }: { id: string }) {
           </div>
           <div className="flex gap-2 flex-wrap">
             <button className="btn btn-primary" onClick={() => setForm(f => !f)}>{held ? '★ Edit holding' : '★ Add to portfolio'}</button>
-            <button className="btn" onClick={() => setPf({ ...pf, watchlist: watched ? pf.watchlist.filter(x => x !== cid) : [...pf.watchlist, cid] })}>{watched ? '☆ Unwatch' : '☆ Watch'}</button>
+            <TrackButton id={cid} />
           </div>
         </div>
         <MetricStrip r={r} />
@@ -54,11 +58,8 @@ export default function CompanyPage({ id }: { id: string }) {
       {tab === 'Financials' && <Financials r={r} />}
       {tab === 'Valuation' && <Valuation r={r} />}
       {tab === 'Industry' && <Industry r={r} />}
-      {tab === 'IPO' && <IpoTab r={r} />}
-      {tab === 'Timeline' && <Timeline r={r} />}
-      {tab === 'Lock-ins' && <LockinTab r={r} />}
-      {tab === 'Documents' && <Docs r={r} />}
-      {tab === 'News' && <NewsTab r={r} />}
+      {tab === 'IPO & lock-ins' && <div className="space-y-5"><IpoTab r={r} /><LockinTab r={r} /><Timeline r={r} /></div>}
+      {tab === 'Filings & news' && <div className="space-y-5"><Docs r={r} /><NewsTab r={r} /></div>}
     </div>
   )
 }
@@ -333,43 +334,20 @@ function Valuation({ r }: { r: CompanyRecord }) {
 
 // ───────── industry ─────────
 function Industry({ r }: { r: CompanyRecord }) {
+  const series = r.facts?.industry_series ?? []
   const claims = r.facts?.industry_claims ?? []
-  const [q, setQ] = useState('')
-  const shown = claims.filter(c => !q || c.text.toLowerCase().includes(q.toLowerCase()))
-  if (!claims.length) return <Card solid><p className="ink2">Industry statistics appear once the offer document's Industry Overview has been read.</p></Card>
-  const withCagr = claims.filter(c => c.cagr_pct != null)
+  const [open, setOpen] = useState(false)
+  if (!series.length && !claims.length) return <Card solid><p className="ink2">Industry charts appear once the offer document's Industry Overview has been read (usually within a few refreshes of filing).</p></Card>
   return (
     <div className="space-y-5">
-      <div className="glass panel p-4 text-sm ink2">Quantitative statements exactly as printed in the offer document's <b>Industry Overview</b> (usually commissioned from CRISIL, Frost & Sullivan, Redseer, etc.). Nothing here is rewritten or estimated.</div>
-      {!!withCagr.length && (
-        <Card title="Growth rates disclosed" solid>
-          <div className="grid md:grid-cols-2 gap-3">
-            {withCagr.slice(0, 8).map((c, i) => (
-              <div key={i} className="glass panel p-3">
-                <div className="display text-[26px] font-semibold">{c.cagr_pct}% <span className="text-sm muted font-normal">CAGR{c.years?.length ? ` · ${c.years.slice(0, 2).join('–')}` : ''}</span></div>
-                <div className="text-sm ink2 mt-1">{c.text.length > 220 ? c.text.slice(0, 220) + '…' : c.text}</div>
-                <div className="muted text-xs mt-1">p.{c.page}</div>
-              </div>
-            ))}
-          </div>
-        </Card>
+      {series.length ? <IndustryCharts series={series} /> : <Card solid><p className="ink2">No chartable series found in this document's Industry Overview yet.</p></Card>}
+      {!!claims.length && (
+        <div>
+          <button className="btn" onClick={() => setOpen(o => !o)}>{open ? 'Hide' : 'Show'} source statements ({claims.length})</button>
+          {open && <Card solid className="mt-4"><ul className="space-y-2">{claims.map((c, i) => (
+            <li key={i} className="text-sm ink2 flex gap-3"><span className="pill tone-slate shrink-0 h-fit">p.{c.page}</span><span>{c.text}</span></li>))}</ul></Card>}
+        </div>
       )}
-      <Card title={`All statements (${claims.length})`} action={<input className="input !h-9 !w-56" placeholder="Search statements…" value={q} onChange={e => setQ(e.target.value)} />} solid>
-        <ul className="space-y-3">
-          {shown.map((c, i) => (
-            <li key={i} className="flex gap-3">
-              <span className="pill tone-slate shrink-0 h-fit">p.{c.page}</span>
-              <div className="text-[15px] ink2">{c.text}
-                <div className="flex flex-wrap gap-1.5 mt-1">
-                  {c.cagr_pct != null && <Pill tone="green">{c.cagr_pct}% CAGR</Pill>}
-                  {c.amounts?.map((a, k) => <Pill key={k} tone="blue">{num(a.value, 2)} {a.unit}</Pill>)}
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-        {claims[0]?.source && <p className="muted text-xs mt-3">Source: <SourceLine s={claims[0].source} /></p>}
-      </Card>
     </div>
   )
 }
