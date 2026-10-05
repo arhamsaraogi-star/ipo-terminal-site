@@ -1,3 +1,4 @@
+import type React from 'react'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import Fuse from 'fuse.js'
 import { forgetSession, login, openWithSession, parseVault, recallSession, rememberSession, saltHex, type Session } from './lib/vault'
@@ -217,7 +218,7 @@ const NAV: { path: string; label: string; icon: string }[] = [
   { path: '/activity', label: 'Activity', icon: '≡' },
 ]
 
-function Tabbed({ base, tab, tabs }: { base: string; tab?: string; tabs: { k: string; label: string; el: JSX.Element }[] }) {
+function Tabbed({ base, tab, tabs }: { base: string; tab?: string; tabs: { k: string; label: string; el: React.ReactNode }[] }) {
   const cur = tabs.find(t => t.k === tab) ?? tabs[0]
   return (
     <div>

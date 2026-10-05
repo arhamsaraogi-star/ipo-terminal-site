@@ -1,10 +1,9 @@
 import { useVault, go } from '../App'
 import { Card, Delta, Kpi, Pill, Stage, Table } from '../components/ui'
-import { allLockins, byId, cmp, eventDate, ipo, issuePrice, issueSize, listedOn, listingGainPct, priceBand, returnVsIssuePct, upcomingEvents } from '../lib/derive'
+import { allLockins, cmp, eventDate, ipo, issuePrice, issueSize, listedOn, listingGainPct, priceBand, returnVsIssuePct, upcomingEvents } from '../lib/derive'
 import { crore, daysUntil, fmtDate, fmtDateTime, inr, pct, urgency } from '../lib/format'
 import { HoldingsTable, ReturnsStrip, TrackingTable } from './Portfolio'
 import { brlms, dealSize, filedOn } from './AnchorDesk'
-import type { CompanyRecord } from '../lib/types'
 
 export default function Dashboard() {
   const v = useVault()
@@ -85,16 +84,6 @@ export default function Dashboard() {
 
     </div>
   )
-}
-
-function PipelineMini({ rows }: { rows: CompanyRecord[] }) {
-  return <Table rows={rows} onRow={r => go(`/company/${r.company.company_id}`)} cols={[
-    { key: 'c', label: 'Company', render: r => <b>{r.company.name}</b>, sort: r => r.company.name },
-    { key: 's', label: 'Stage', hideMobile: true, render: r => <Stage s={r.company.lifecycle} /> },
-    { key: 'sz', label: 'Issue size', hideMobile: true, right: true, render: r => crore(issueSize(r)), sort: r => issueSize(r) },
-    { key: 'pb', label: 'Price band', hideMobile: true, right: true, render: r => priceBand(r) },
-    { key: 'o', label: 'Opens', right: true, render: r => fmtDate(eventDate(r, 'ISSUE_OPEN'), false), sort: r => eventDate(r, 'ISSUE_OPEN') },
-  ]} />
 }
 
 export const holder = (c: string) => ({

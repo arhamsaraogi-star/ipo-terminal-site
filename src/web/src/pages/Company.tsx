@@ -3,7 +3,7 @@ import { Area, AreaChart, Bar, CartesianGrid, ComposedChart, Legend, Line, Refer
 import { usePf, useVault } from '../App'
 import { Card, Delta, FactValue, Pill, Seg, SourceLine, Stage, Table } from '../components/ui'
 import {
-  byId, cmp, dayChangePct, finTable, holdingMarks, ipo, isHeld, isStub, isWatched, issuePrice, issueSize, latest,
+  byId, cmp, dayChangePct, finTable, holdingMarks, ipo, isHeld, isStub, issuePrice, issueSize, latest,
   listedOn, listingGainPct, listingOpen, mcapAtIssue, mcapNow, nextEvent, priceBand, quote, returnVsIssuePct, valuationInputs,
 } from '../lib/derive'
 import { crore, daysUntil, fmtDate, fmtDateTime, fv, humanize, inr, num, pct, shares, urgency } from '../lib/format'
@@ -19,7 +19,6 @@ type Tab = typeof TABS[number]
 
 export default function CompanyPage({ id }: { id: string }) {
   const v = useVault()
-  const { pf, setPf } = usePf()
   const [tab, setTab] = useState<Tab>('Overview')
   const [form, setForm] = useState(false)
   const r = byId(v, v.redirects?.[id] ?? id)
