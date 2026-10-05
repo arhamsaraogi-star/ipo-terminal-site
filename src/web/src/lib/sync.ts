@@ -2,7 +2,7 @@
 // (derived from your password — the server never sees it) and stored as users/<uid>.bin on the repo's `userdata`
 // branch through the GitHub API. The API token lives inside the encrypted vault, so only signed-in users have it.
 import type { Pf } from './portfolio'
-import { openUser, sealUser, type Session } from './vault'
+import { openUser, sealUser, type AccountFile, type Session } from './vault'
 
 export interface SyncCfg { repo: string; branch: string; token: string }
 export interface Remote { pf: Pf; updated_at: string; device?: string }
@@ -57,4 +57,36 @@ export function merge(prefer: Pf, other: Pf): Pf {
     privates: by(prefer.privates, other.privates).filter(keep('p')),
     watchlist: [], deleted: [...deleted].slice(-500),
   }
+}
+
+// ───────── accounts (users/<uid>.key — the master key wrapped under the user's password; useless without it) ─────────
+const LOCAL_ACCT = (uid: string) => `ipo-terminal:acct:${uid}`
+
+/** Look up an account file: public read of the userdata branch (no token needed), then this device. */
+export async function fetchAccount(repo: string | null, uid: string): Promise<AccountFile | null> {
+  if (repo) {
+    try {
+      const r = await fetch(`${API}/repos/${repo}/contents/users/${uid}.key?ref=userdata&t=${Date.now()}`, { cache: 'no-store', headers: { Accept: 'application/vnd.github.raw+json' } })
+      if (r.ok) return await r.json()
+      if (r.status === 403 || r.status === 429) {             // unauthenticated API rate limit → CDN copy
+        const r2 = await fetch(`https://raw.githubusercontent.com/${repo}/userdata/users/${uid}.key?t=${Date.now()}`, { cache: 'no-store' })
+        if (r2.ok) return await r2.json()
+      }
+    } catch { /* offline: fall through to the device copy */ }
+  }
+  try { const s = localStorage.getItem(LOCAL_ACCT(uid)); return s ? JSON.parse(s) : null } catch { return null }
+}
+
+/** Save an account file to the repo (so it works on every device) and to this device. Returns where it was saved. */
+export async function saveAccount(cfg: SyncCfg | null, uid: string, file: AccountFile): Promise<'everywhere' | 'device'> {
+  try { localStorage.setItem(LOCAL_ACCT(uid), JSON.stringify(file)) } catch { /* noop */ }
+  if (!cfg) return 'device'
+  const path = `/contents/users/${uid}.key`
+  const cur = await gh(cfg, `${path}?ref=${cfg.branch}`)
+  const sha = cur.ok ? (await cur.json()).sha : undefined
+  const body = () => JSON.stringify({ message: 'account', content: btoa(unescape(encodeURIComponent(JSON.stringify(file)))), branch: cfg.branch, ...(sha ? { sha } : {}) })
+  let r = await gh(cfg, path, { method: 'PUT', body: body() })
+  if (r.status === 404 || r.status === 422) { await ensureBranch(cfg); r = await gh(cfg, path, { method: 'PUT', body: body() }) }
+  if (!r.ok) throw new Error(`Could not save the account (${r.status})`)
+  return 'everywhere'
 }

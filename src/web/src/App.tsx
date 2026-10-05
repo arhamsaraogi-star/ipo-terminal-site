@@ -1,8 +1,8 @@
 import type React from 'react'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import Fuse from 'fuse.js'
-import { forgetSession, login, openWithSession, parseVault, recallSession, rememberSession, saltHex, type Session } from './lib/vault'
-import { merge, pull, push, type SyncCfg } from './lib/sync'
+import { MIN_PASSWORD, changePassword, createAccount, forgetSession, openWithMk, parseVault, recallSession, rememberSession, unlockAccount, userId, type Session } from './lib/vault'
+import { fetchAccount, merge, pull, push, saveAccount, type SyncCfg } from './lib/sync'
 import type { CompanyRecord, Vault } from './lib/types'
 import { daysUntil, fmtDateTime } from './lib/format'
 import { allLockins, upcomingEvents } from './lib/derive'
@@ -36,7 +36,8 @@ const VAULT_URL = `${import.meta.env.BASE_URL}vault.bin`
 const META_URL = `${import.meta.env.BASE_URL}vault-meta.json`
 
 export type SyncState = { mode: 'off' | 'syncing' | 'ok' | 'error'; at?: string; msg?: string }
-const SyncCtx = createContext<{ sync: SyncState; username: string } | null>(null)
+const LockCtx = createContext<() => void>(() => {})
+const SyncCtx = createContext<{ sync: SyncState; username: string; changePw: (o: string, n: string) => Promise<void>; note: string } | null>(null)
 export const useSync = () => useContext(SyncCtx)!
 
 export default function App() {
@@ -44,6 +45,7 @@ export default function App() {
   const [buf, setBuf] = useState<ArrayBuffer | null>(null)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState('')
   const sessRef = useRef<Session | null>(null)
   const [username, setUsername] = useState('')
   const [updated, setUpdated] = useState<string | null>(null)
@@ -123,7 +125,7 @@ export default function App() {
         const m = await (await fetch(`${META_URL}?t=${Date.now()}`, { cache: 'no-store' })).json()
         if (m.built_at && m.built_at !== vault.meta.built_at && sessRef.current) {
           const b = await (await fetch(`${VAULT_URL}?t=${Date.now()}`, { cache: 'no-store' })).arrayBuffer()
-          setVault(await openWithSession<Vault>(parseVault(b), sessRef.current))
+          setVault(await openWithMk<Vault>(parseVault(b), sessRef.current.mk))
           setUpdated(stamp())
         }
       } catch { /* offline or mid-deploy: try again next tick */ }
@@ -148,8 +150,8 @@ export default function App() {
       .then(async b => {
         setBuf(b)
         const h = parseVault(b)
-        const s = await recallSession(saltHex(h))
-        if (s) { try { await startSession(s, await openWithSession<Vault>(h, s), false) } catch { await forgetSession() } }
+        const s = await recallSession(h.saltHex)
+        if (s) { try { await startSession(s, await openWithMk<Vault>(h, s.mk), false) } catch { await forgetSession() } }
       })
       .catch(e => setErr(String(e.message ?? e)))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -158,51 +160,111 @@ export default function App() {
     if (!buf) return
     setBusy(true); setErr('')
     try {
-      const { data, session } = await login<Vault>(buf, user, pw)
+      const h = parseVault(buf)
+      const file = await fetchAccount(h.repo, await userId(user))
+      if (!file) throw new Error('No account with that username yet — tap “Create account”.')
+      const session = await unlockAccount(h, file, pw)
+      await startSession(session, await openWithMk<Vault>(h, session.mk), remember)
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+  async function signup(user: string, pw: string, code: string, remember: boolean) {
+    if (!buf) return
+    setBusy(true); setErr(''); setNote('')
+    try {
+      if (!/^[a-z0-9._-]{3,30}$/i.test(user.trim())) throw new Error('Username: 3–30 letters, numbers, dots, dashes or underscores.')
+      if (pw.length < MIN_PASSWORD) throw new Error(`Password must be at least ${MIN_PASSWORD} characters.`)
+      const h = parseVault(buf)
+      const uid = await userId(user)
+      if (await fetchAccount(h.repo, uid)) throw new Error('That username is taken — pick another or sign in.')
+      const { file, session } = await createAccount(h, user, pw, code)
+      const data = await openWithMk<Vault>(h, session.mk)
+      const where = await saveAccount((data as Vault & { sync?: SyncCfg | null }).sync ?? null, uid, file).catch(() => 'device' as const)
+      if (where === 'device') setNote('Account created on this device. To sign in on other devices too, the admin needs to switch on sync (one GitHub setting).')
       await startSession(session, data, remember)
-    } catch (e) { setErr((e as Error).message.includes('Not a terminal') ? (e as Error).message : 'Unknown username or wrong password') } finally { setBusy(false) }
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+  async function changePw(oldPw: string, newPw: string) {
+    const s = sessRef.current
+    if (!s || !buf) throw new Error('Not signed in')
+    const h = parseVault(buf)
+    const file = await fetchAccount(h.repo, s.uid)
+    if (!file) throw new Error('Account file not found')
+    const r = await changePassword(h, file, oldPw, newPw)
+    await saveAccount(cfgRef.current, s.uid, r.file)
+    sessRef.current = r.session
+    await rememberSession(r.session)
+    dirty.current = true
+    await pushNow()                                   // re-encrypt your portfolio with the new personal key
   }
   async function lock() {
     if (dirty.current) await pushNow()
     await forgetSession(); sessRef.current = null; shaRef.current = null
-    setVault(null); setPfState(loadPf('__none__')); setSync({ mode: 'off' }); location.hash = '/'
+    setVault(null); setNote(''); setPfState(loadPf('__none__')); setSync({ mode: 'off' }); location.hash = '/'
   }
 
   return (
     <>
       <div className="ambient" aria-hidden><i /><i /><i /><i /></div>
       {vault
-        ? <Ctx.Provider value={view}><PfCtx.Provider value={{ pf, setPf }}><SyncCtx.Provider value={{ sync, username }}><Shell onLock={lock} updated={updated} /></SyncCtx.Provider></PfCtx.Provider></Ctx.Provider>
-        : <Login onUnlock={unlock} err={err} busy={busy} ready={!!buf} />}
+        ? <Ctx.Provider value={view}><PfCtx.Provider value={{ pf, setPf }}><SyncCtx.Provider value={{ sync, username, changePw, note }}><LockCtx.Provider value={lock}><Shell onLock={lock} updated={updated} /></LockCtx.Provider></SyncCtx.Provider></PfCtx.Provider></Ctx.Provider>
+        : <Login onUnlock={unlock} onSignup={signup} err={err} busy={busy} ready={!!buf} />}
     </>
   )
 }
 
-function Login({ onUnlock, err, busy, ready }: { onUnlock: (u: string, pw: string, r: boolean) => void; err: string; busy: boolean; ready: boolean }) {
-  const [user, setUser] = useState(() => { try { return localStorage.getItem('ipo-terminal:last-user') ?? '' } catch { return '' } })
+function Login({ onUnlock, onSignup, err, busy, ready }: {
+  onUnlock: (u: string, pw: string, r: boolean) => void; onSignup: (u: string, pw: string, code: string, r: boolean) => void
+  err: string; busy: boolean; ready: boolean
+}) {
+  const last = (() => { try { return localStorage.getItem('ipo-terminal:last-user') ?? '' } catch { return '' } })()
+  const [mode, setMode] = useState<'in' | 'up'>(last ? 'in' : 'up')
+  const [user, setUser] = useState(last)
   const [pw, setPw] = useState('')
+  const [pw2, setPw2] = useState('')
+  const [code, setCode] = useState('')
+  const [show, setShow] = useState(false)
   const [remember, setRemember] = useState(true)
-  const ref = useRef<HTMLInputElement>(null)
-  const pref = useRef<HTMLInputElement>(null)
-  useEffect(() => (user ? pref.current?.focus() : ref.current?.focus()), []) // eslint-disable-line react-hooks/exhaustive-deps
-  const submit = (e: FormEvent) => { e.preventDefault(); if (user && pw) { try { localStorage.setItem('ipo-terminal:last-user', user) } catch { /* noop */ } onUnlock(user, pw, remember) } }
+  const [local, setLocal] = useState('')
+  const submit = (e: FormEvent) => {
+    e.preventDefault(); setLocal('')
+    if (!user.trim() || !pw) return
+    try { localStorage.setItem('ipo-terminal:last-user', user.trim()) } catch { /* noop */ }
+    if (mode === 'in') return onUnlock(user, pw, remember)
+    if (pw.length < MIN_PASSWORD) return setLocal(`Password must be at least ${MIN_PASSWORD} characters.`)
+    if (pw !== pw2) return setLocal('Passwords don’t match.')
+    if (!code) return setLocal('Enter the access code you were given.')
+    onSignup(user, pw, code, remember)
+  }
+  const msg = local || err
   return (
     <main className="min-h-screen grid place-items-center p-6">
-      <form onSubmit={submit} className={`glass glass-strong w-full max-w-[420px] p-9 fade-in ${err ? 'shake' : ''}`} key={err}>
-        <div className="w-14 h-14 rounded-[18px] grid place-items-center mb-6 text-white text-2xl"
+      <form onSubmit={submit} className={`glass glass-strong w-full max-w-[420px] p-8 fade-in ${msg ? 'shake' : ''}`} key={msg}>
+        <div className="w-14 h-14 rounded-[18px] grid place-items-center mb-5 text-white text-2xl"
           style={{ background: 'linear-gradient(135deg,#0a84ff,#7d5cff)', boxShadow: '0 10px 30px rgba(10,132,255,.35)' }}>◆</div>
         <h1 className="display text-[30px] font-bold leading-tight">IPO Terminal</h1>
-        <p className="muted mt-1 mb-7">Sign in to decrypt the terminal and your portfolio.</p>
-        <input ref={ref} className="input" placeholder="Username" value={user} onChange={e => setUser(e.target.value)} autoComplete="username" aria-label="Username" autoCapitalize="none" spellCheck={false} />
-        <input ref={pref} type="password" className="input mt-3" placeholder="Password" value={pw} onChange={e => setPw(e.target.value)} autoComplete="current-password" aria-label="Password" />
+        <div className="seg mt-5 mb-5 w-full grid grid-cols-2">
+          <button type="button" aria-pressed={mode === 'in'} onClick={() => setMode('in')}>Sign in</button>
+          <button type="button" aria-pressed={mode === 'up'} onClick={() => setMode('up')}>Create account</button>
+        </div>
+        <input className="input" placeholder="Username" value={user} onChange={e => setUser(e.target.value)} autoComplete="username" aria-label="Username" autoCapitalize="none" spellCheck={false} autoFocus={!user} />
+        <div className="relative mt-3">
+          <input type={show ? 'text' : 'password'} className="input !pr-16" placeholder={mode === 'up' ? `Password (min ${MIN_PASSWORD})` : 'Password'} value={pw} onChange={e => setPw(e.target.value)}
+            autoComplete={mode === 'up' ? 'new-password' : 'current-password'} aria-label="Password" autoFocus={!!user} />
+          <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-xs muted" onClick={() => setShow(x => !x)}>{show ? 'Hide' : 'Show'}</button>
+        </div>
+        {mode === 'up' && <>
+          <input type={show ? 'text' : 'password'} className="input mt-3" placeholder="Repeat password" value={pw2} onChange={e => setPw2(e.target.value)} autoComplete="new-password" aria-label="Repeat password" />
+          <input type="password" className="input mt-3" placeholder="Access code" value={code} onChange={e => setCode(e.target.value)} autoComplete="off" aria-label="Access code" />
+          <p className="muted text-xs mt-2">Access code = the terminal password you already have. Needed once; after that just username + password, on any device.</p>
+        </>}
         <label className="flex items-center gap-2 mt-4 text-sm ink2 select-none">
           <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} /> Keep me signed in on this device
         </label>
-        <button className="btn btn-primary w-full justify-center mt-6 h-11 text-[15px]" disabled={busy || !ready}>
-          {busy ? 'Signing in…' : ready ? 'Sign in' : 'Loading…'}
+        <button className="btn btn-primary w-full justify-center mt-5 h-11 text-[15px]" disabled={busy || !ready}>
+          {busy ? (mode === 'up' ? 'Creating account…' : 'Signing in…') : !ready ? 'Loading…' : mode === 'up' ? 'Create account' : 'Sign in'}
         </button>
-        {err && <p className="neg text-sm mt-4">{err}</p>}
-        <p className="muted text-xs mt-6">AES-256 encrypted. Your password never leaves this browser; your portfolio syncs encrypted across your devices.</p>
+        {msg && <p className="neg text-sm mt-4">{msg}</p>}
+        <p className="muted text-xs mt-5">AES-256 encrypted. Your password never leaves this browser.</p>
       </form>
     </main>
   )
@@ -295,12 +357,13 @@ function Shell({ onLock, updated }: { onLock: () => void; updated: string | null
             {updated && <><br /><span className="pos">● Live-updated at {updated}</span></>}
             {!!v.meta.ingest?.failures.length && <><br /><a href="#/activity/review" className="warn">{v.meta.ingest.failures.length} source issue(s)</a></>}
             <SyncBadge />
-            <button className="btn w-full justify-center mt-3" onClick={onLock}>Sign out</button>
+            <button className="btn w-full justify-center mt-3" onClick={onLock}>Log out</button>
           </div>
         </div>
       </aside>
       <div className="min-w-0 p-4 lg:p-6 lg:pl-2">
         <TopBar onMenu={() => setMenu(m => !m)} />
+        <SignupNote />
         {v.meta.has_sample && (
           <div className="glass panel px-5 py-3 mb-5 text-sm flex gap-3 items-center" style={{ borderColor: 'rgba(245,158,11,.45)' }}>
             <span className="pill tone-amber">SAMPLE DATA</span>
@@ -316,6 +379,47 @@ function Shell({ onLock, updated }: { onLock: () => void; updated: string | null
       </div>
     </div>
   )
+}
+
+function AccountMenu() {
+  const { sync, username, changePw } = useSync()
+  const [open, setOpen] = useState(false)
+  const [cp, setCp] = useState(false)
+  const [o, setO] = useState(''); const [n, setN] = useState(''); const [m, setM] = useState('')
+  const lockFn = useContext(LockCtx)
+  return (
+    <div className="relative">
+      <button className="btn" onClick={() => setOpen(x => !x)} aria-label="Account">
+        <span className="w-6 h-6 rounded-full grid place-items-center text-white text-xs font-bold" style={{ background: 'linear-gradient(135deg,#0a84ff,#7d5cff)' }}>{username.slice(0, 1).toUpperCase()}</span>
+        <span className="hidden sm:inline">{username}</span>
+      </button>
+      {open && (
+        <div className="pop glass glass-strong right-0 top-12 w-[280px] p-4 space-y-3" style={{ color: 'var(--ink)' }}>
+          <div><div className="font-semibold">{username}</div><SyncLine sync={sync} /></div>
+          {!cp ? <button className="btn w-full justify-center" onClick={() => setCp(true)}>Change password</button> : (
+            <form className="space-y-2" onSubmit={async e => { e.preventDefault(); setM(''); try { await changePw(o, n); setM('Password changed'); setO(''); setN(''); setCp(false) } catch (x) { setM((x as Error).message) } }}>
+              <input type="password" className="input !h-9" placeholder="Current password" value={o} onChange={e => setO(e.target.value)} autoComplete="current-password" />
+              <input type="password" className="input !h-9" placeholder={`New password (min ${MIN_PASSWORD})`} value={n} onChange={e => setN(e.target.value)} autoComplete="new-password" />
+              <button className="btn btn-primary w-full justify-center">Save</button>
+            </form>)}
+          {m && <div className="text-sm ink2">{m}</div>}
+          <button className="btn w-full justify-center" onClick={lockFn}>Log out</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SignupNote() {
+  const { note } = useSync()
+  const [hide, setHide] = useState(false)
+  if (!note || hide) return null
+  return <div className="glass panel px-5 py-3 mb-5 text-sm flex gap-3 items-center justify-between"><span className="ink2">{note}</span><button className="btn" onClick={() => setHide(true)}>OK</button></div>
+}
+
+function SyncLine({ sync }: { sync: SyncState }) {
+  const t = { off: ['muted', 'Saved on this device'], syncing: ['muted', 'Syncing…'], ok: ['pos', `Synced across devices${sync.at ? ` · ${sync.at}` : ''}`], error: ['warn', 'Sync issue — saved on this device'] }[sync.mode]
+  return <div className={`text-xs ${t[0]}`} title={sync.msg}>● {t[1]}</div>
 }
 
 function SyncBadge() {
@@ -366,6 +470,7 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
         )}
       </div>
       <ThemeToggle />
+      <AccountMenu />
     </div>
   )
 }

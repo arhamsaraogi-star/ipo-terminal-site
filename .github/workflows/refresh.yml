@@ -1,7 +1,7 @@
 # Live refresh — the whole terminal runs from this one public repo.
 #   state branch : encrypted pipeline data (AES-256-GCM, TERMINAL_PASSPHRASE)
 #   GitHub Pages : app shell + encrypted vault (no plaintext anywhere)
-# Required: repo secrets TERMINAL_PASSPHRASE (pipeline state key), TERMINAL_USERS ("user:password" lines), SYNC_TOKEN (fine-grained PAT, contents r/w — cross-device sync); Settings → Pages → Source: GitHub Actions.
+# Required: repo secrets TERMINAL_PASSPHRASE (access code for sign-up + state key), SYNC_TOKEN (fine-grained PAT, contents r/w — accounts + cross-device sync); Settings → Pages → Source: GitHub Actions.
 name: Refresh
 on:
   schedule:
@@ -29,7 +29,6 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     env:
       TERMINAL_PASSPHRASE: ${{ secrets.TERMINAL_PASSPHRASE }}
-      TERMINAL_USERS: ${{ secrets.TERMINAL_USERS }}
       SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }}
       PYTHONPATH: src
     steps:
@@ -82,7 +81,7 @@ jobs:
       - name: Refuse to publish plaintext
         if: steps.gate.outputs.changed == 'true' || github.event_name != 'schedule'
         run: |
-          head -c 5 src/web/dist/vault.bin | grep -q IPOV2
+          head -c 5 src/web/dist/vault.bin | grep -q IPOV3
           ! grep -rIl -e '"company_id"' src/web/dist
           ! find src/web/dist -name '*.json' ! -name 'vault-meta.json' | grep .
       - uses: actions/configure-pages@v5

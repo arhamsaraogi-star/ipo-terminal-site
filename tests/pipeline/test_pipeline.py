@@ -109,14 +109,12 @@ def test_chronology_break_is_flagged_not_fixed():
     assert any(e["date"] == "2026-07-01" for e in b.events)
 
 
-def test_vault_v2_users():
+def test_vault_v3_access_code():
     import pytest as _pt
-    users = vault.parse_users("# comment\narham:pass word 1:x\nboss : secondpass\n")
-    assert users == [("arham", "pass word 1:x"), ("boss", "secondpass")]
-    blob = vault.seal_v2({"k": "₹1"}, users, b"\x01" * 16, iterations=1000)
-    assert blob[:5] == b"IPOV2" and b"arham" not in blob and b"pass word" not in blob
-    assert vault.open_v2(blob, "ARHAM", "pass word 1:x") == {"k": "₹1"}
+    blob = vault.seal_v3({"k": "₹1"}, "secret code", b"\x01" * 16, iterations=1000, repo="o/r")
+    assert blob[:5] == b"IPOV3" and b"secret" not in blob and b"\xe2\x82\xb9" not in blob
+    assert vault.open_v3(blob, "secret code") == {"k": "₹1"}
     with _pt.raises(Exception):
-        vault.open_v2(blob, "boss", "wrong pass!")
+        vault.open_v3(blob, "wrong code")
     with _pt.raises(ValueError):
-        vault.parse_users("x:short")
+        vault.seal_v3({}, "short", b"\x01" * 16)

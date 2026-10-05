@@ -1,7 +1,7 @@
 # Changelog
 
 ## 0.4.0 — 2026-10-05 · Logins, sync, private companies, industry charts
-- Username + password sign-in (TERMINAL_USERS secret, IPOV2 vault with per-user wrapped keys); encrypted cross-device sync of portfolio, tracking and private companies (userdata branch)
+- Self-service accounts: Create account (username + password ≥ 6 + one-time access code), sign in anywhere, change password, log out (IPOV3 vault); encrypted cross-device sync of portfolio, tracking and private companies (userdata branch)
 - Add any private company in the world with funding rounds; positions marked to the latest round; portfolio MOIC + XIRR + cost-vs-value chart
 - Track any company with a status and note; home page leads with the portfolio, new filings, latest IPO news and tracking
 - Industry tab rebuilt as charts from the offer document's chart labels, tables and statements (with page links and calculated CAGRs)

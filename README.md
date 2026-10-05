@@ -48,15 +48,13 @@ npm test && npm run build
 
 ## Sign-in, users and cross-device memory
 
-* **Users** live only in the repo secret `TERMINAL_USERS` — one `username:password` per line (password ≥ 8 chars).
-  Nothing about users is in the code; the published vault holds only salted hashes of usernames and per-user wrapped keys
-  (format `IPOV2`, see `src/pipeline/build/vault.py`). Until `TERMINAL_USERS` exists you sign in as `admin` with the old passphrase.
+* **Accounts**: anyone with the access code (the `TERMINAL_PASSPHRASE` secret) can tap *Create account* once (username + password, min 6). After that they sign in with username + password on any device. Account files on the `userdata` branch hold only the master key wrapped under each password.
 * **Cross-device memory**: portfolio, tracking list and private companies are encrypted in the browser with a key derived from
   your password and saved to `users/<hash>.bin` on the `userdata` branch. Needs the repo secret `SYNC_TOKEN` — a fine-grained
   GitHub token with *Contents: read & write* on this repository only. The token is shipped inside the encrypted vault, so only
   signed-in users can use it. Without it, data stays on each device.
-* `TERMINAL_PASSPHRASE` remains the internal key for the encrypted pipeline state branch — keep it.
-* After changing either secret, run **Actions → Refresh → Run workflow** to rebuild the site.
+* `TERMINAL_PASSPHRASE` is both the sign-up access code and the key for the encrypted pipeline state branch — keep it.
+* After changing a secret, run **Actions → Refresh → Run workflow** to rebuild the site.
 
 ## Portfolio, tracking & private companies
 
