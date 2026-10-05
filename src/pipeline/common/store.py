@@ -87,6 +87,7 @@ class CompanyBundle:
 
 
 def company_dirs(data: Path = DATA) -> Iterator[Path]:
+    (data / "companies").mkdir(parents=True, exist_ok=True)  # absent on a fresh checkout (data is gitignored)
     yield from sorted(p for p in (data / "companies").iterdir() if (p / "company.json").exists())
 
 
