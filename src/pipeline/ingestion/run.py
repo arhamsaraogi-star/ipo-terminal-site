@@ -309,6 +309,11 @@ def apply_detail(b: CompanyBundle, o: dict, d: dict, s: dict) -> None:
     meta = d.get("metaInfo") or {}
     if meta.get("isin") and re.match(r"^INE[A-Z0-9]{9}$", meta["isin"]) and not b.company["identifiers"].get("isin"):
         b.company["identifiers"]["isin"] = meta["isin"]
+    if "price_band_high" not in F and info.get("Price Range"):
+        lo, hi = N.parse_band(info["Price Range"])
+        if lo is not None:
+            F["price_band_low"] = fact(oid, "price_band_low", lo, "INR", "Price band — low", s)
+            F["price_band_high"] = fact(oid, "price_band_high", hi, "INR", "Price band — high", s)
     if (v := N.parse_num(info.get("Face Value"))) is not None:
         F["face_value"] = fact(oid, "face_value", v, "INR", "Face value", s)
     if (v := N.parse_num(info.get("Bid Lot") or info.get("Minimum Order Quantity"))) is not None:

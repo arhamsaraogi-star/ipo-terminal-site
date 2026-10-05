@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useVault, go } from '../App'
 import { Card, PageHead, Seg, Stage, Table } from '../components/ui'
 import { eventDate, ipo, isHeld, isWatched, issueSize, priceBand } from '../lib/derive'
-import { STAGE, crore, daysUntil, fmtDate } from '../lib/format'
+import { STAGE, crore, fmtDate } from '../lib/format'
 
 type Seg_ = 'ALL' | 'MAINBOARD' | 'SME'
 
@@ -15,17 +15,14 @@ export default function Pipeline({ mode }: { mode: 'all' | 'upcoming' }) {
   const rows = useMemo(() => v.companies.filter(r => {
     const c = r.company
     if (c.lifecycle === 'PRIVATE') return false
-    if (mode === 'upcoming') {
-      const open = eventDate(r, 'ISSUE_OPEN') ?? eventDate(r, 'LISTING')
-      if (!open || daysUntil(open) < -3 || c.lifecycle === 'LISTED') return false
-    }
+    if (mode === 'upcoming' && !['ISSUE_ANNOUNCED', 'ISSUE_OPEN', 'ISSUE_CLOSED', 'RHP_FILED'].includes(c.lifecycle)) return false
     return (seg === 'ALL' || c.segment === seg) && (stage === 'ALL' || c.lifecycle === stage) && (sector === 'ALL' || c.sector === sector)
   }), [v, mode, seg, stage, sector])
 
   return (
     <div>
       <PageHead title={mode === 'all' ? 'IPO Pipeline' : 'Upcoming IPOs'}
-        sub={mode === 'all' ? 'Every company from DRHP filing through listing.' : 'Issues with announced or scheduled dates.'} />
+        sub={mode === 'all' ? 'Every company from DRHP filing through listing.' : 'RHP filed, announced, open, or closed and awaiting listing.'} />
       <Card solid action={
         <div className="flex flex-wrap gap-2 items-center">
           <Seg value={seg} onChange={setSeg} options={[{ v: 'ALL', label: 'All' }, { v: 'MAINBOARD', label: 'Mainboard' }, { v: 'SME', label: 'SME' }]} />
