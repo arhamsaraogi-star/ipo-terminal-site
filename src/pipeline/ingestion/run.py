@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
 from datetime import date, datetime, timedelta
@@ -656,10 +657,18 @@ def main(argv=None) -> int:
         update_market(st, client)
     if "covers" not in skip:
         print('▶ extract_documents', flush=True)
-        extract_documents(st, client, a.cover_budget)
+        left_min = (BUDGET[0] * 0.85 - (__import__('time').monotonic() - _T0)) / 60
+        extract_documents(st, client, a.cover_budget, minutes=max(2.0, left_min))
     if "news" not in skip:
         print('▶ ingest_news', flush=True)
         ingest_news(st, nse, a.news_companies)
+    if "intel" not in skip and os.environ.get("TERMINAL_PASSPHRASE"):
+        print('▶ web news for requested companies', flush=True)
+        try:
+            from pipeline.ingestion import private_intel
+            private_intel.update(Client(min_interval=1.0), os.environ["TERMINAL_PASSPHRASE"], st.log)
+        except Exception as e:  # noqa: BLE001 — never fatal
+            st.failures.append(f"web news: {str(e)[:120]}")
 
     changes = diff_changes(st)
     for b in st.bundles.values():
@@ -710,13 +719,23 @@ def best_document(b: CompanyBundle) -> dict | None:
     return min(docs, key=lambda d: (DOC_ORDER[d["doc_type"]], -int((d.get("filing_date") or "0000-00-00").replace("-", ""))))
 
 
+def _read_document(url: str):
+    """Worker (separate process): download one offer document and run every extractor. Returns plain data."""
+    from pipeline.extraction import drhp_cover as X
+    from pipeline.extraction import offer_doc as OD
+    blob = download(Client(), url)
+    pdf = X.pdf_bytes(blob)
+    if not pdf:
+        raise SourceError("no PDF inside download")
+    pages, n = X.cover_pages(pdf)
+    return pages, n, hashlib.sha256(pdf).hexdigest(), X.extract(pages), OD.extract(pdf), len(pdf)
+
+
 def extract_documents(st: State, client: Client, budget: int, minutes: float = 30) -> None:
     """Download the best offer document per company and extract cover + body (financials, KPIs, peers, industry).
     Re-runs when a newer document type arrives (DRHP -> RHP -> Prospectus) or the extractor version changes."""
     import gzip
     import time
-    from pipeline.extraction import drhp_cover as X
-    from pipeline.extraction import offer_doc as OD
     deadline = time.monotonic() + minutes * 60
     done = failed = 0
     queue = []
@@ -732,34 +751,48 @@ def extract_documents(st: State, client: Client, budget: int, minutes: float = 3
         urgent = stage in ("ISSUE_OPEN", "ISSUE_ANNOUNCED", "ISSUE_CLOSED", "RHP_FILED", "LISTED") or (TODAY - date.fromisoformat(filed)).days <= 14 if filed != "0000" else False
         queue.append((0 if urgent else 1, "".join(chr(255 - ord(c)) for c in filed), b, d))
     queue.sort(key=lambda x: (x[0], x[1]))
-    for _, _, b, d in queue[:budget]:
-        if time.monotonic() > deadline or out_of_time(0.8):
-            break
-        try:
-            blob = download(client, d["url"])
-            pdf = X.pdf_bytes(blob)
-            if not pdf:
-                raise SourceError("no PDF inside download")
-            pages, n = X.cover_pages(pdf)
-            sha = hashlib.sha256(pdf).hexdigest()
-            e = X.extract(pages)
-            body = OD.extract(pdf)
-        except Exception as exn:  # noqa: BLE001 — any parser failure is recorded, never fatal
-            tries = (d.get("extraction") or {}).get("tries", 0) + 1
-            d["extraction"] = {"status": "failed_permanent" if tries >= 3 else "failed", "tries": tries,
-                               "error": str(exn)[:200], "extracted_at": now_ist()}
-            failed += 1
-            continue
-        d.update({"sha256": sha, "pages": n, "downloaded_at": now_ist(), "size_bytes": len(pdf)})
-        tdir = DATA / "text" / sha[:16]
-        tdir.mkdir(parents=True, exist_ok=True)
-        for k, p in enumerate(pages, 1):
-            (tdir / f"p{k:03d}.txt.gz").write_bytes(gzip.compress(p.encode("utf-8"), mtime=0))
-        apply_cover(b, d, e, sha)
-        apply_body(b, d, body, sha)
-        d["extraction"] = {"status": "ok", "extracted_at": now_ist(), "garbled": e["garbled"], "extractor": DOC_VERSION,
-                           "financial_values": len(body.financials), "peers": len(body.peers), "industry_claims": len(body.industry), "industry_series": len(body.industry_series)}
-        done += 1
+    # Parallel: offer documents are 5–25 MB and take 10–40 s each to download + read. A process pool reads several at once
+    # (downloads are network-bound, parsing is CPU-bound — GitHub runners have 4 cores).
+    from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
+    workers = max(1, min(int(os.environ.get("DOC_WORKERS", "4")), 8))
+    todo = list(queue[:budget])
+    running: dict = {}
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        while todo or running:
+            while todo and len(running) < workers * 2 and time.monotonic() < deadline and not out_of_time(0.8):
+                _, _, b, d = todo.pop(0)
+                running[pool.submit(_read_document, d["url"])] = (b, d)
+            if not running:
+                break
+            finished, _ = wait(list(running), timeout=max(5, deadline - time.monotonic()), return_when=FIRST_COMPLETED)
+            if not finished:
+                break
+            for fut in finished:
+                b, d = running.pop(fut)
+                try:
+                    r = fut.result()
+                except Exception as exn:  # noqa: BLE001 — any parser failure is recorded, never fatal
+                    tries = (d.get("extraction") or {}).get("tries", 0) + 1
+                    d["extraction"] = {"status": "failed_permanent" if tries >= 3 else "failed", "tries": tries,
+                                       "error": str(exn)[:200], "extracted_at": now_ist()}
+                    failed += 1
+                    continue
+                pages, n, sha, e, body, size = r
+                d.update({"sha256": sha, "pages": n, "downloaded_at": now_ist(), "size_bytes": size})
+                tdir = DATA / "text" / sha[:16]
+                tdir.mkdir(parents=True, exist_ok=True)
+                for k, p_ in enumerate(pages, 1):
+                    (tdir / f"p{k:03d}.txt.gz").write_bytes(gzip.compress(p_.encode("utf-8"), mtime=0))
+                apply_cover(b, d, e, sha)
+                apply_body(b, d, body, sha)
+                d["extraction"] = {"status": "ok", "extracted_at": now_ist(), "garbled": e["garbled"], "extractor": DOC_VERSION,
+                                   "financial_values": len(body.financials), "peers": len(body.peers), "industry_claims": len(body.industry),
+                                   "industry_series": len(body.industry_series), "overview": bool(body.overview)}
+                done += 1
+            if time.monotonic() > deadline or out_of_time(0.8):
+                for fut in running:
+                    fut.cancel()
+                break
     left = max(0, len(queue) - done - failed)
     st.log.append(f"Offer documents: {done} read (cover + financials + peers + industry), {failed} failed, {left} queued for next runs")
 
@@ -791,6 +824,9 @@ def apply_body(b: CompanyBundle, d: dict, r, sha: str) -> None:
     facts["industry_series"] = series or facts.get("industry_series", [])
     facts["source_document"] = d["document_id"]
     b.facts = facts
+    if getattr(r, "overview", None):
+        b.company["overview"] = {"summary": r.overview,
+                                 "source": src(st_type, d["url"], page=r.overview_page, table="Our Business — Overview", doc_id=d["document_id"])}
     if r.pre_issue_shares:
         o = offering(b)
         s_ = src(st_type, d["url"], page=r.pre_issue_page, table="Capital structure", doc_id=d["document_id"])

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0 — 2026-10-05 · One big refresh, company summaries, web news
+- Offer documents read in parallel (4 workers); pushes and manual runs do a full sweep, 15-minute runs stay incremental
+- "About the company" summary from the offer document's Our Business → Overview (with page link)
+- Web news + press-reported valuations for private, tracked and held companies (Google News; requests encrypted with the terminal key)
+
 ## 0.4.0 — 2026-10-05 · Logins, sync, private companies, industry charts
 - Self-service accounts: Create account (username + password ≥ 6 + one-time access code), sign in anywhere, change password, log out (IPOV3 vault); encrypted cross-device sync of portfolio, tracking and private companies (userdata branch)
 - Add any private company in the world with funding rounds; positions marked to the latest round; portfolio MOIC + XIRR + cost-vs-value chart

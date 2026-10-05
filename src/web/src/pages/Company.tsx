@@ -11,6 +11,7 @@ import type { CompanyRecord, Fact, Holding } from '../lib/types'
 import { holder } from './Dashboard'
 import { PrivateView } from './PrivateCo'
 import { TrackButton } from '../components/Track'
+import { WebIntel } from '../components/WebNews'
 import { IndustryCharts } from '../components/IndustryCharts'
 import { brlms, dealSize, filedOn } from './AnchorDesk'
 
@@ -58,7 +59,7 @@ export default function CompanyPage({ id }: { id: string }) {
       {tab === 'Valuation' && <Valuation r={r} />}
       {tab === 'Industry' && <Industry r={r} />}
       {tab === 'IPO & lock-ins' && <div className="space-y-5"><IpoTab r={r} /><LockinTab r={r} /><Timeline r={r} /></div>}
-      {tab === 'Filings & news' && <div className="space-y-5"><Docs r={r} /><NewsTab r={r} /></div>}
+      {tab === 'Filings & news' && <div className="space-y-5"><NewsTab r={r} /><WebIntel name={r.company.name} pending={false} /><Docs r={r} /></div>}
     </div>
   )
 }
@@ -134,6 +135,12 @@ function Overview({ r }: { r: CompanyRecord }) {
   const upcoming = r.events.filter(e => daysUntil(e.date) >= 0).slice(0, 6)
   return (
     <div className="space-y-5">
+      {r.company.overview?.summary && (
+        <Card title="About the company" solid>
+          <p className="ink2 text-[15px] leading-relaxed">{r.company.overview.summary}</p>
+          {r.company.overview.source && <p className="muted text-xs mt-2">From the offer document's “Our Business — Overview” · <SourceLine s={r.company.overview.source} /></p>}
+        </Card>
+      )}
       <PriceChart r={r} />
       <div className="grid xl:grid-cols-2 gap-5">
         <DealTeam r={r} />

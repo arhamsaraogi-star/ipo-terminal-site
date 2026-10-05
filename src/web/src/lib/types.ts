@@ -67,6 +67,9 @@ export interface Peer { name: string; face_value?: number | null; price?: number
   pb?: number | null; pe?: number | null; eps_basic?: number | null; ronw?: number | null; nav?: number | null; source?: Source }
 export interface IndustryClaim { text: string; page: number; cagr_pct?: number | null; amounts?: { value: number; unit: string }[]; years?: string[]; source?: Source }
 export interface IndustrySeries { title: string; unit?: string | null; page: number; kind: 'chart' | 'table' | 'text'; periods: string[]; projected?: boolean[]; rows: { name: string; values: (number | null)[] }[]; note?: string | null; macro?: boolean; source?: Source }
+export interface WebNews { title: string; url: string; publisher?: string | null; published_at?: string | null }
+export interface PressValuation { currency: string; value_mn?: number; value_cr?: number; text: string; date?: string | null; title: string; url: string; publisher?: string | null }
+export interface Intel { name: string; fetched_at: string; news: WebNews[]; valuations: PressValuation[] }
 export interface Quote { date: string; close: number; prev_close?: number | null; open?: number | null; high?: number | null; low?: number | null
   shares?: number | null; mcap_cr?: number | null; series?: string; volume?: number | null }
 export interface Market { symbol: string; quote?: Quote | null; listing?: { date: string; open?: number | null; high?: number | null; low?: number | null; close?: number | null; prev_close?: number | null } | null
@@ -83,4 +86,5 @@ export interface Vault {
   event_types: Record<string, { label: string; group: string; order: number }>
   companies: CompanyRecord[]; changes: Change[]
   portfolio: { holdings: Holding[]; watchlist: string[]; tracking: Track[]; privates: PrivateCo[] }; review: string[]; redirects?: Record<string, string>
+  private_intel?: Record<string, Intel>; sync?: { repo: string; branch: string; token: string } | null
 }

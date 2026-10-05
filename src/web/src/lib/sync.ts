@@ -90,3 +90,22 @@ export async function saveAccount(cfg: SyncCfg | null, uid: string, file: Accoun
   if (!r.ok) throw new Error(`Could not save the account (${r.status})`)
   return 'everywhere'
 }
+
+// ───────── web-news requests + on-demand refresh ─────────
+export async function putRequests(cfg: SyncCfg, uid: string, blob: Uint8Array) {
+  const path = `/contents/requests/${uid}.bin`
+  const cur = await gh(cfg, `${path}?ref=${cfg.branch}`)
+  const sha = cur.ok ? (await cur.json()).sha : undefined
+  const body = () => JSON.stringify({ message: 'requests', content: b64(blob), branch: cfg.branch, ...(sha ? { sha } : {}) })
+  let r = await gh(cfg, path, { method: 'PUT', body: body() })
+  if (r.status === 404 || r.status === 422) { await ensureBranch(cfg); r = await gh(cfg, path, { method: 'PUT', body: body() }) }
+  return r.ok
+}
+
+/** Start a terminal refresh now (needs the token's "Actions: read and write" permission; silently skipped otherwise). */
+export async function refreshNow(cfg: SyncCfg): Promise<boolean> {
+  try {
+    const r = await gh(cfg, '/actions/workflows/refresh.yml/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main' }) })
+    return r.status === 204
+  } catch { return false }
+}

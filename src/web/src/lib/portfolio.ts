@@ -106,3 +106,6 @@ export function xirr(flows: { date: string; amount: number }[]): number | null {
   for (let i = 0; i < 200; i++) { const mid = (lo + hi) / 2; if (npv(lo) * npv(mid) <= 0) hi = mid; else lo = mid }
   return ((lo + hi) / 2) * 100
 }
+
+/** Same normalisation as pipeline/ingestion/private_intel.py norm_name. */
+export const intelKey = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()

@@ -16,3 +16,5 @@ data/index/
 data/review/
 state.enc
 data/market/
+data/requests/
+data/private_intel.json

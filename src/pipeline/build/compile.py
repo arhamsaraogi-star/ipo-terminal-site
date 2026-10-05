@@ -119,6 +119,7 @@ def build_payload(data: Path = DATA, write_derived: bool = True) -> tuple[dict, 
         "changes": changes[:1000],
         "portfolio": portfolio,
         "redirects": read_json(data / "index" / "redirects.json", {}),
+        "private_intel": read_json(data / "private_intel.json", {}),
         "review": report.warnings,
     }
     return payload, report

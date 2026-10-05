@@ -82,6 +82,8 @@ class Result:
     pre_issue_page: int | None = None
     industry: list[dict] = field(default_factory=list)
     industry_series: list[dict] = field(default_factory=list)
+    overview: str | None = None
+    overview_page: int | None = None
     periods: list[str] = field(default_factory=list)
 
 
@@ -563,6 +565,10 @@ def extract(pdf: bytes) -> Result:
     res.pre_issue_shares, res.pre_issue_page = scan_pre_issue_shares(pages_text)
     res.industry = scan_industry(pages_text)
     try:
+        res.overview, res.overview_page = scan_overview(pages_text)
+    except Exception:
+        pass
+    try:
         from .industry_series import scan as scan_series
         st = next((i for i, t in enumerate(pages_text) if i > 10 and IND_START.search(t)), None)
         if st is not None:
@@ -571,3 +577,48 @@ def extract(pdf: bytes) -> Result:
     except Exception:
         res.industry_series = []
     return res
+
+
+# ───────────────────────── company overview (Our Business → Overview) ─────────────────────────
+BUS_RE = re.compile(r"^\s*OUR\s+BUSINESS\s*$", re.M)
+OVERVIEW_HEAD = re.compile(r"^\s*(?:Business\s+)?Overview\s*:?\s*$", re.M | re.I)
+
+
+def scan_overview(pages_text: list[str], max_chars: int = 1400) -> tuple[str | None, int | None]:
+    """First paragraphs under 'Overview' in the 'Our Business' chapter, as printed (source tags removed)."""
+    starts = [i for i, t in enumerate(pages_text) if i > 10 and BUS_RE.search(t)]
+    for s0 in starts[:3]:
+        for i in range(s0, min(s0 + 4, len(pages_text))):
+            m = OVERVIEW_HEAD.search(pages_text[i])
+            if not m:
+                continue
+            text = pages_text[i][m.end():] + "\n" + (pages_text[i + 1] if i + 1 < len(pages_text) else "")
+            out, para = [], []
+            for line in text.splitlines():
+                l = line.strip()
+                if not l:
+                    if para:
+                        out.append(" ".join(para)); para = []
+                    continue
+                if re.fullmatch(r"\d{1,4}", l):            # page number
+                    continue
+                words = l.split()
+                heading = len(l) < 70 and not re.search(r"[.,;:)]$", l) and sum(w[:1].isupper() for w in words) >= max(1, len(words) - 1) and len(" ".join(out)) > 300
+                if heading:
+                    break
+                para.append(l)
+                if len(" ".join(out + para)) > max_chars * 1.3:
+                    break
+            if para:
+                out.append(" ".join(para))
+            txt = " ".join(out)
+            txt = re.sub(r"\s*[(\[](?:Source|Sources?)\s*:[^)\]]*[)\]]\.?", "", txt)
+            txt = re.sub(r"(\w)- (\w)", r"\1\2", txt)
+            txt = re.sub(r"\s+", " ", txt).strip()
+            if len(txt) < 120:
+                continue
+            if len(txt) > max_chars:
+                cut = txt[:max_chars]
+                txt = cut[:cut.rfind(". ") + 1] if ". " in cut else cut + "…"
+            return txt, i + 1
+    return None, None

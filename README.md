@@ -51,16 +51,22 @@ npm test && npm run build
 * **Accounts**: anyone with the access code (the `TERMINAL_PASSPHRASE` secret) can tap *Create account* once (username + password, min 6). After that they sign in with username + password on any device. Account files on the `userdata` branch hold only the master key wrapped under each password.
 * **Cross-device memory**: portfolio, tracking list and private companies are encrypted in the browser with a key derived from
   your password and saved to `users/<hash>.bin` on the `userdata` branch. Needs the repo secret `SYNC_TOKEN` — a fine-grained
-  GitHub token with *Contents: read & write* on this repository only. The token is shipped inside the encrypted vault, so only
+  GitHub token on this repository only with *Contents: read & write* (accounts, sync, web-news requests) and *Actions: read & write* (lets the terminal start a refresh as soon as you add a company). The token is shipped inside the encrypted vault, so only
   signed-in users can use it. Without it, data stays on each device.
 * `TERMINAL_PASSPHRASE` is both the sign-up access code and the key for the encrypted pipeline state branch — keep it.
 * After changing a secret, run **Actions → Refresh → Run workflow** to rebuild the site.
+
+## Refresh cadence
+
+* Push to `main`, a manual *Run workflow* with “Full sweep”, or a fresh state → **full refresh** (up to 110 min): every offer document is
+  read with 4 parallel workers. Overnight hourly runs are full too.
+* Every 15 minutes in Indian hours → **incremental**: only new filings, changed documents, prices and news.
 
 ## Portfolio, tracking & private companies
 
 * ★ **Add to portfolio** on any company (pre-IPO with entry valuation, anchor, allotment, market). Returns: MOIC, XIRR, CAGR.
 * ◎ **Track** any company with a status (Interested → Evaluating → In talks with BRLM → Committed / Passed) and a note.
-* **+ Private company** adds any unlisted company in the world (any currency, FX to ₹), its funding rounds and your position.
+* **+ Private company** adds any unlisted company in the world (any currency, FX to ₹), its funding rounds and your position. The refresh job searches Google News for it (and for everything you track or hold) and lists headlines plus valuation figures quoted in the press — one click turns a press figure into a mark.
 
 ## Adding a new event type / source
 

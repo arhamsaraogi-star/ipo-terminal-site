@@ -54,7 +54,7 @@ export async function openWithMk<T>(h: VaultHeader, mk: CryptoKey): Promise<T> {
 /** Access code → raw master key bytes (only during sign-up, to wrap it for the new account). Throws if the code is wrong. */
 export async function masterFromCode(h: VaultHeader, code: string): Promise<{ raw: Uint8Array; key: CryptoKey }> {
   const raw = await pbkdf2(code, h.salt, h.iters, 256)
-  const key = await aes(raw, ['decrypt'])
+  const key = await aes(raw, ['encrypt', 'decrypt'])
   try { await crypto.subtle.decrypt({ name: 'AES-GCM', iv: hex(h.mk.iv) as BufferSource, additionalData: te.encode('IPOV3-dek') as BufferSource }, key, hex(h.mk.wk) as BufferSource) } catch { throw new Error('Wrong access code') }
   return { raw, key }
 }
@@ -88,7 +88,7 @@ export async function unlockAccount(h: VaultHeader, file: AccountFile, password:
   let raw: Uint8Array
   try { raw = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: hex(file.iv) as BufferSource, additionalData: te.encode('IPOV3-acct:' + uid) as BufferSource }, kek, hex(file.wk) as BufferSource)) }
   catch { throw new Error('Wrong username or password') }
-  const mk = await aes(raw, ['decrypt'])
+  const mk = await aes(raw, ['encrypt', 'decrypt'])
   raw.fill(0)
   return { uid, username: file.username, mk, udk, salt: h.saltHex }
 }
@@ -106,9 +106,16 @@ export async function changePassword(h: VaultHeader, file: AccountFile, oldPw: s
   const keys = await passwordKeys(newPw, salt, h.iters)
   const iv = crypto.getRandomValues(new Uint8Array(12))
   const wk = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: te.encode('IPOV3-acct:' + uid) }, keys.kek, raw as BufferSource))
-  const mk = await aes(raw, ['decrypt'])
+  const mk = await aes(raw, ['encrypt', 'decrypt'])
   raw.fill(0)
   return { file: { ...file, salt: toHex(salt), iv: toHex(iv), wk: toHex(wk) }, session: { uid, username: file.username, mk, udk: keys.udk, salt: h.saltHex } }
+}
+
+// ---- web-news requests: company names only, encrypted with the terminal master key so CI can read them ----
+export async function sealRequest(s: Session, names: { name: string; country?: string }[]): Promise<Uint8Array> {
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: te.encode('IPOR1') }, s.mk, te.encode(JSON.stringify({ names })))
+  return new Uint8Array([...te.encode('IPOR1'), ...iv, ...new Uint8Array(ct)])
 }
 
 // ---- personal data encryption (cross-device sync) ----

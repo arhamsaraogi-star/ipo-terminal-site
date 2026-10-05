@@ -1,8 +1,8 @@
 import type React from 'react'
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import Fuse from 'fuse.js'
-import { MIN_PASSWORD, changePassword, createAccount, forgetSession, openWithMk, parseVault, recallSession, rememberSession, unlockAccount, userId, type Session } from './lib/vault'
-import { fetchAccount, merge, pull, push, saveAccount, type SyncCfg } from './lib/sync'
+import { MIN_PASSWORD, changePassword, createAccount, sealRequest, forgetSession, openWithMk, parseVault, recallSession, rememberSession, unlockAccount, userId, type Session } from './lib/vault'
+import { fetchAccount, merge, pull, push, putRequests, refreshNow, saveAccount, type SyncCfg } from './lib/sync'
 import type { CompanyRecord, Vault } from './lib/types'
 import { daysUntil, fmtDateTime } from './lib/format'
 import { allLockins, upcomingEvents } from './lib/derive'
@@ -69,7 +69,7 @@ export default function App() {
     try {
       for (let i = 0; i < 3; i++) {
         const r = await push(c, s, pfRef.current, shaRef.current)
-        if (!r.conflict) { shaRef.current = r.sha; dirty.current = false; setSync({ mode: 'ok', at: stamp() }); return }
+        if (!r.conflict) { shaRef.current = r.sha; dirty.current = false; setSync({ mode: 'ok', at: stamp() }); void writeRequests(); return }
         const { remote, sha } = await pull(c, s)            // someone else saved first: merge, keep everything, retry
         shaRef.current = sha
         if (remote) apply(merge(pfRef.current, normalisePf(remote.pf)))
@@ -77,6 +77,30 @@ export default function App() {
       throw new Error('could not save after 3 attempts')
     } catch (e) { setSync({ mode: 'error', msg: (e as Error).message }) }
   }
+  // Names this user wants web news for: own private companies + tracked + held. Written only when the list changes.
+  const vaultRef = useRef<Vault | null>(null)
+  vaultRef.current = vault
+  async function writeRequests() {
+    const s = sessRef.current, c = cfgRef.current, v = vaultRef.current
+    if (!s || !c || !v) return
+    const p = pfRef.current
+    const byId = new Map(v.companies.map(r => [r.company.company_id, r.company.name]))
+    const names = [...p.privates.map(x => ({ name: x.name, country: x.country })),
+      ...[...new Set([...p.tracking.map(t => t.company_id), ...p.holdings.map(h => h.company_id)])].map(id => byId.get(id)).filter(Boolean).map(n => ({ name: n as string }))]
+    const sig = JSON.stringify(names.map(n => n.name).sort())
+    const k = `ipo-terminal:req:${s.uid}`
+    let prev = ''
+    try { prev = localStorage.getItem(k) ?? '' } catch { /* noop */ }
+    if (sig === prev) return
+    try {
+      if (await putRequests(c, s.uid, await sealRequest(s, names))) {
+        const prevNames: string[] = prev ? JSON.parse(prev) : []
+        if (names.some(n => !prevNames.includes(n.name))) void refreshNow(c)   // new name → fetch its news now
+        try { localStorage.setItem(k, sig) } catch { /* noop */ }
+      }
+    } catch { /* retried on the next save */ }
+  }
+
   const setPf = (next: Pf) => {
     apply(withTombstones(pfRef.current, next))
     if (cfgRef.current) { dirty.current = true; clearTimeout(timer.current); timer.current = window.setTimeout(pushNow, 1200) }

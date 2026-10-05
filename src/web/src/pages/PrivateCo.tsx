@@ -5,8 +5,9 @@ import { Card, Delta, Pill } from '../components/ui'
 import { TrackButton } from '../components/Track'
 import { holdingMarks } from '../lib/derive'
 import { fmtDate, pct } from '../lib/format'
-import { fmtCur, slug, toCr, unitLabel } from '../lib/portfolio'
-import type { CompanyRecord, Holding, PrivateCo, Round } from '../lib/types'
+import { fmtCur, intelKey, slug, toCr, unitLabel } from '../lib/portfolio'
+import type { CompanyRecord, Holding, PressValuation, PrivateCo, Round } from '../lib/types'
+import { WebIntel, pressText } from '../components/WebNews'
 
 const CURRENCIES = ['INR', 'USD', 'EUR', 'GBP', 'SGD', 'AED', 'JPY', 'CNY', 'HKD', 'AUD', 'CAD', 'CHF']
 const ROUND_LABELS = ['Seed', 'Series A', 'Series B', 'Series C', 'Series D', 'Series E+', 'Pre-IPO', 'Secondary', 'Bridge', 'Internal mark', 'Fund NAV mark']
@@ -123,6 +124,19 @@ export function PrivateView({ r }: { r: CompanyRecord }) {
   const v = useVault()
   const p = r.custom!
   const [edit, setEdit] = useState(false)
+  const { pf, setPf } = usePf()
+  const [msg, setMsg] = useState('')
+  const applyMark = (x: PressValuation) => {
+    const cur = p.currency || 'INR'
+    let val: number | null = null
+    if (x.currency === 'INR' && x.value_cr != null) val = cur === 'INR' ? x.value_cr : p.fx_inr ? (x.value_cr * 10) / p.fx_inr : null
+    else if (x.value_mn != null) val = x.currency === cur ? x.value_mn : cur === 'INR' && x.currency === 'USD' ? (x.value_mn * 84) / 10 : null
+    if (val == null) { setMsg(`Can't convert ${x.currency} to ${cur} — add it as a round manually.`); return }
+    const rd: Round = { date: (x.date ?? new Date().toISOString()).slice(0, 10), label: `Press: ${x.publisher ?? 'report'}`, post_money: Math.round(val * 100) / 100 }
+    setPf({ ...pf, privates: pf.privates.map(q => q.company_id === p.company_id ? { ...q, rounds: [...q.rounds, rd].sort((a, b) => a.date.localeCompare(b.date)) } : q) })
+    setMsg(`Added ${fmtCur(rd.post_money, cur)} (${rd.date}) as a mark${x.currency === 'USD' && cur === 'INR' ? ' — converted at ₹84/$' : ''}.`)
+  }
+  const press = v.private_intel?.[intelKey(p.name)]?.valuations?.[0]
   const h = v.portfolio.holdings.find(x => x.company_id === p.company_id)
   const marks = h ? holdingMarks(r, h) : null
   const last = p.rounds[p.rounds.length - 1]
@@ -149,13 +163,15 @@ export function PrivateView({ r }: { r: CompanyRecord }) {
           <div className="flex gap-2 flex-wrap"><button className="btn btn-primary" onClick={() => setEdit(true)}>Edit / add round</button><TrackButton id={p.company_id} /></div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5">
-          <div><div className="eyebrow">Latest valuation</div><div className="display text-[22px] font-semibold">{fmtCur(last?.post_money, p.currency)}</div><div className="muted text-xs">{last ? `${last.label} · ${fmtDate(last.date)}` : 'no rounds yet'}</div></div>
+          <div><div className="eyebrow">Latest valuation</div><div className="display text-[22px] font-semibold">{fmtCur(last?.post_money, p.currency)}</div><div className="muted text-xs">{last ? `${last.label} · ${fmtDate(last.date)}` : press ? `press: ${pressText(press)} · ${fmtDate(press.date ?? null)}` : 'no rounds yet'}</div></div>
           <div><div className="eyebrow">Valuation CAGR</div><div className="display text-[22px] font-semibold"><Delta v={growth} /></div><div className="muted text-xs">first → latest round</div></div>
           <div><div className="eyebrow">Our multiple</div><div className={`display text-[22px] font-semibold ${best?.multiple != null ? (best.multiple >= 1 ? 'pos' : 'neg') : ''}`}>{best?.multiple != null ? `${best.multiple.toFixed(2)}x` : '—'}</div><div className="muted text-xs">{best?.cagr != null ? `${pct(best.cagr)} a year` : h ? 'needs a later round' : 'not held'}</div></div>
           <div><div className="eyebrow">Our cost</div><div className="display text-[22px] font-semibold">{h ? fmtCur(h.invested_cr, p.currency) : '—'}</div><div className="muted text-xs">{h ? `since ${fmtDate(h.acquired_on)}` : ''}{p.currency !== 'INR' && h?.invested_cr ? ` · ₹${toCr(h.invested_cr, p.currency, p.fx_inr)?.toFixed(1)} cr` : ''}</div></div>
         </div>
       </header>
       {p.note && <Card solid><p className="ink2 whitespace-pre-wrap">{p.note}</p></Card>}
+      <WebIntel name={p.name} onUse={applyMark} />
+      {msg && <div className="glass panel px-4 py-3 text-sm ink2">{msg}</div>}
       <Card title={`Valuation by round (${unitLabel(p.currency)})`} solid>
         {data.length ? (
           <div className="h-[260px]"><ResponsiveContainer>

@@ -23,7 +23,7 @@ permissions:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 150
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
@@ -31,6 +31,7 @@ jobs:
       TERMINAL_PASSPHRASE: ${{ secrets.TERMINAL_PASSPHRASE }}
       SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }}
       PYTHONPATH: src
+      DOC_WORKERS: "4"
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 1 }
@@ -47,14 +48,21 @@ jobs:
           else
             echo "No state yet — first run will backfill 6 months"; echo "fresh=true" >> $GITHUB_OUTPUT
           fi
+      - name: Fetch members' web-news requests (encrypted)
+        run: |
+          mkdir -p data/requests
+          if git fetch --depth 1 origin userdata 2>/dev/null; then
+            git archive origin/userdata requests 2>/dev/null | tar -x -C data/ 2>/dev/null || true
+          fi
+          ls data/requests | wc -l
       - name: Ingest SEBI + NSE (Mainboard and SME)
         env:
-          FULL: ${{ inputs.full == true || steps.state.outputs.fresh == 'true' || github.event.schedule == '0 19-23 * * *' }}
+          FULL: ${{ inputs.full == true || steps.state.outputs.fresh == 'true' || github.event_name == 'push' || github.event.schedule == '0 19-23 * * *' }}
         run: |
           ARGS="--days 183"
           [ "${{ steps.state.outputs.fresh }}" = "true" ] && ARGS="$ARGS --backfill"
-          if [ "$FULL" = "true" ]; then ARGS="$ARGS --news-companies 400 --cover-budget 400 --pdf-budget 600 --max-minutes 50"
-          else ARGS="$ARGS --news-companies 60 --cover-budget 25 --pdf-budget 60 --max-minutes 12"; fi
+          if [ "$FULL" = "true" ]; then ARGS="$ARGS --news-companies 400 --cover-budget 2000 --pdf-budget 600 --max-minutes 110"
+          else ARGS="$ARGS --news-companies 60 --cover-budget 400 --pdf-budget 60 --max-minutes 12"; fi
           python -m pipeline.ingestion.run $ARGS
       - name: Validation gate
         id: gate
