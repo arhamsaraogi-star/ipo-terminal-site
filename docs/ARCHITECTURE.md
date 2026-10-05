@@ -303,3 +303,16 @@ A `concurrency` group stops two runs from committing at once. Commits are made b
 9. Company pages with source drill-down
 10. Actions automation + deploy
 11. Hostile-analyst QA pass
+
+---
+
+## Update — 5 Oct 2026 (Phase 2 go-live)
+
+| Change | Why |
+|---|---|
+| **One public repo** (`ipo-terminal-site`) replaces the two-repo design. Pipeline data is stored **encrypted** (same passphrase, IPOV1) on an orphan `state` branch that is force-pushed as a single commit each run. | No deploy token needed; public repos get unlimited Actions minutes, which allows a 15-minute refresh cadence; nothing readable is ever committed. |
+| Pages deploys via `actions/deploy-pages` straight from the workflow. | No second repo, no PAT. |
+| Holdings and watchlist live in the browser (export/import for other devices). | A public repo can't hold them; announcements are pulled for every listed company, so news coverage doesn't depend on holdings. |
+| **Anchor Desk** added as the primary workflow. | The user's family office wants to get into anchor books, which means spotting offer documents on the day they are filed and reaching the lead manager early. |
+| Sources live: SEBI offer-document listings, NSE offer-document register (Mainboard + Emerge SME), NSE issues and issue detail, NSE announcements, NSE holidays. | BSE (incl. BSE-SME-only issues) blocks cloud runners (HTTP 403, Akamai). This is a known gap. |
+| Cover-page extraction (pp.1–3) of DRHP/RHP. It captures offer size and structure, ICDR eligibility route, anchor / pre-IPO placement flags, promoters, CIN, BRLM deal-team contacts, and the registrar. Downloads are length-verified, the text layer is stored for provenance, and a corrupted text layer is flagged `requires_review`. | Highest-value fields for an anchor investor, and deterministic because ICDR fixes the cover layout. |

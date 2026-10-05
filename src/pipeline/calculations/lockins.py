@@ -35,8 +35,10 @@ def select_rule(segment: str, category: str, issue_open: date, rules: list[dict]
     return None
 
 
-def _first(events: list[dict], etype: str) -> date | None:
+def _first(events: list[dict], etype: str, allow_derived: bool = False) -> date | None:
     ds = [e["date"] for e in events if e["event_type"] == etype and e["date_kind"] != "derived"]
+    if not ds and allow_derived:  # e.g. allotment = close + 1 working day (T+1) when no notice was captured
+        ds = [e["date"] for e in events if e["event_type"] == etype]
     return date.fromisoformat(min(ds)) if ds else None
 
 
@@ -48,7 +50,7 @@ def _calc_fact(fid: str, metric: str, value, unit: str, formula: str, inputs: li
 def compute(b: CompanyBundle, rules: list[dict] | None = None) -> list[dict]:
     out: list[dict] = []
     cid = b.company["company_id"]
-    allot, opened = _first(b.events, "BASIS_OF_ALLOTMENT"), _first(b.events, "ISSUE_OPEN")
+    allot, opened = _first(b.events, "BASIS_OF_ALLOTMENT", True), _first(b.events, "ISSUE_OPEN")
     if not (allot and opened):
         return out
     for o in b.offerings:

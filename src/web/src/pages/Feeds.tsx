@@ -71,6 +71,10 @@ export function Review() {
     <div>
       <PageHead title="Needs Review" sub="Validation warnings. Nothing here is silently corrected." />
       <Card solid>
+        {!!v.meta.ingest?.failures.length && <div className="mb-4"><div className="eyebrow mb-1">Source issues in the last pull</div>
+          <ul className="space-y-1">{v.meta.ingest.failures.map((f, i) => <li key={i}><code className="text-sm warn">{f}</code></li>)}</ul></div>}
+        {v.meta.ingest && <div className="mb-4"><div className="eyebrow mb-1">Last pull · {fmtDateTime(v.meta.ingest.ran_at)}</div>
+          <ul className="space-y-1">{v.meta.ingest.log.map((f, i) => <li key={i} className="text-sm ink2">{f}</li>)}</ul></div>}
         {v.review.length ? <ul className="space-y-2">{v.review.map((w, i) => <li key={i} className="flex gap-2"><span className="warn">⚠</span><code className="text-sm">{w}</code></li>)}</ul>
           : <p className="muted">All checks passed in the latest build.</p>}
       </Card>

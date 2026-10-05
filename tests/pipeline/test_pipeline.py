@@ -6,10 +6,19 @@ import pytest
 from pipeline.build import vault
 from pipeline.build.compile import build_payload
 from pipeline.calculations import lockins as lk
-from pipeline.common.store import DATA, company_dirs, load_company
+import sys
+import tempfile
+from pathlib import Path
+
+from pipeline.common.store import company_dirs, load_company
 from pipeline.validation.checks import validate_bundle
 
-BUNDLES = {d.name: load_company(d) for d in company_dirs(DATA)}
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
+from make_sample_data import build_samples  # noqa: E402
+
+SAMPLE = Path(tempfile.mkdtemp()) / "data"
+build_samples(SAMPLE)
+BUNDLES = {d.name: load_company(d) for d in company_dirs(SAMPLE)}
 
 
 @pytest.mark.parametrize("cid", sorted(BUNDLES))
@@ -19,7 +28,7 @@ def test_every_company_validates(cid):
 
 
 def test_payload_builds_without_errors():
-    payload, report = build_payload(write_derived=False)
+    payload, report = build_payload(SAMPLE, write_derived=False)
     assert report.ok, report.errors
     assert payload["meta"]["companies"] == len(BUNDLES)
 

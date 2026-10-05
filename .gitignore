@@ -8,3 +8,10 @@ __pycache__/
 .env*
 *.pdf
 .DS_Store
+# All pipeline data lives encrypted on the `state` branch — never commit it in plaintext
+data/companies/
+data/changes/
+data/text/
+data/index/
+data/review/
+state.enc

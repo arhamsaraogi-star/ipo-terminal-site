@@ -1,14 +1,18 @@
-import shutil
+import sys
+from pathlib import Path
 
 import pytest
 
-from pipeline.common.store import DATA, read_json
+from pipeline.common.store import read_json
 from pipeline.portfolio import Rejected, apply
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
+from make_sample_data import build_samples  # noqa: E402
 
 
 @pytest.fixture
 def data(tmp_path):
-    shutil.copytree(DATA, tmp_path / "data")
+    build_samples(tmp_path / "data")
     return tmp_path / "data"
 
 

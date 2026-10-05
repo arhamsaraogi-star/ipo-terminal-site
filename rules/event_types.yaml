@@ -27,3 +27,5 @@ PREFERENTIAL_ISSUE:    { label: Preferential issue,         group: corporate,   
 BONUS:                 { label: Bonus,                      group: corporate,    order: 115 }
 SPLIT:                 { label: Stock split,                group: corporate,    order: 116 }
 BUYBACK:               { label: Buyback,                    group: corporate,    order: 117 }
+PROSPECTUS_FILED:      { label: Prospectus filed,           group: issue,        order: 78 }
+DOCUMENT_REVISED:      { label: Addendum / corrigendum,     group: pipeline,     order: 35 }

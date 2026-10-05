@@ -161,6 +161,16 @@ def ember() -> CompanyBundle:
     return CompanyBundle(c, [], None, [], [], [], [])
 
 
+def build_samples(data) -> None:
+    """Write the DEMO dataset into an arbitrary data directory (used by tests)."""
+    for b in (aster(), borealis(), cobalt(), ember()):
+        save_company(b, data)
+    write_json(data / "portfolio" / "holdings.json", {
+        "holdings": [{"company_id": "aster-demo-logistics", "quantity": 340, "avg_cost": 432.0,
+                      "acquired_on": "2026-07-31", "route": "ALLOTMENT", "note": "DEMO holding"}],
+        "watchlist": ["borealis-demo-foods", "cobalt-demo-fintech"]})
+
+
 def main() -> None:
     root = DATA / "companies"
     if "--remove" in sys.argv:

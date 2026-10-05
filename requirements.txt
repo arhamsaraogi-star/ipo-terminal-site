@@ -2,4 +2,6 @@ jsonschema>=4.21
 referencing>=0.35
 pyyaml>=6
 cryptography>=42
+requests>=2.31
 pytest>=8
+pymupdf>=1.24

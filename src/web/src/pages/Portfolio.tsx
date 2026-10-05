@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { useVault, go } from '../App'
+import { usePf, useVault, go } from '../App'
+import { exportPf, importPf } from '../lib/portfolio'
 import { Card, PageHead, Pill, Seg, Stage, Table } from '../components/ui'
 import { byId, issuePrice, nextEvent, nextLockin } from '../lib/derive'
 import { daysUntil, fmtDate, fmtDateTime, inr, num, urgency } from '../lib/format'
@@ -23,6 +24,20 @@ export function HoldingsTable() {
     ]} />
 }
 
+function PortfolioIO() {
+  const { pf, setPf } = usePf()
+  const [msg, setMsg] = useState('')
+  return (
+    <div className="glass panel p-4 flex flex-wrap items-center gap-3 text-sm">
+      <span className="ink2">Holdings and watchlist are stored privately in this browser — never on GitHub.</span>
+      <button className="btn" onClick={() => exportPf(pf)}>Export</button>
+      <label className="btn cursor-pointer">Import<input type="file" accept="application/json" className="hidden"
+        onChange={async e => { const f = e.target.files?.[0]; if (!f) return; try { setPf(await importPf(f)); setMsg('Imported') } catch (x) { setMsg((x as Error).message) } }} /></label>
+      {msg && <span className="muted">{msg}</span>}
+    </div>
+  )
+}
+
 export default function Portfolio() {
   const v = useVault()
   const [tier, setTier] = useState<'all' | 'official' | 'media'>('all')
@@ -34,7 +49,7 @@ export default function Portfolio() {
   const watch = v.portfolio.watchlist.map(id => byId(v, id)).filter(Boolean)
   return (
     <div className="space-y-5">
-      <PageHead title="Portfolio" sub="IPOs you have invested in. Every exchange announcement and news item on these companies is tracked." />
+      <PageHead title="Portfolio" sub="IPOs you are invested in. Every exchange announcement on these companies is tracked." />
       <Card title="Holdings"><HoldingsTable /></Card>
       <Card title="Every news item on my holdings" action={<Seg value={tier} onChange={setTier} options={[{ v: 'all', label: 'All' }, { v: 'official', label: 'Exchange filings' }, { v: 'media', label: 'Media' }]} />} solid>
         <Table rows={news} empty="No news yet" cols={[
@@ -52,9 +67,7 @@ export default function Portfolio() {
           { key: 'e', label: 'Next event', render: r => { const e = nextEvent(r!); return e ? `${v.event_types[e.event_type]?.label} · ${fmtDate(e.date, false)}` : '—' } },
         ]} />
       </Card>
-      {v.meta.repo
-        ? <p className="muted text-sm">Holdings are edited through GitHub issues on {v.meta.repo} (button on each company page) so the news pipeline knows what to track.</p>
-        : <p className="muted text-sm">Set <code>repo</code> in config/vault.json (or deploy via GitHub Actions) to enable the ★ Add to portfolio buttons.</p>}
+      <PortfolioIO />
     </div>
   )
 }

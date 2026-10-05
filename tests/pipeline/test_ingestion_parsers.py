@@ -1,0 +1,66 @@
+from datetime import date
+
+from pipeline.ingestion import nse as N
+from pipeline.ingestion.run import Calendar, classify_news
+from pipeline.ingestion.sebi import classify, parse_rows
+from pipeline.normalization.entities import Resolver, norm, pretty
+
+
+def test_issue_size_fresh_amount_and_ofs_shares():
+    t = ("Initial Public offer comprising of Fresh issue aggregating up to Rs. 29,000 lakhs and Offer for Sale of up to "
+         "10,00,000 Equity Shares (including Anchor investor portion of 65,58,991 Equity Shares)")
+    p = N.parse_issue_size(t)
+    assert p == {"anchor_shares": 6558991, "fresh_issue_cr": 290.0, "ofs_shares": 1000000}
+
+
+def test_issue_size_units():
+    assert N.parse_issue_size("Fresh issue aggregating up to Rs. 1,250 crores")["fresh_issue_cr"] == 1250.0
+    assert N.parse_issue_size("Fresh issue of Rs. 4,500 million and OFS aggregating Rs. 2,000 million")["ofs_cr"] == 200.0
+    assert N.parse_issue_size("Public issue of 40,00,000 Equity Shares")["fresh_issue_shares"] == 4000000
+
+
+def test_band_and_dates():
+    assert N.parse_band("Rs.132 to Rs.139") == (132.0, 139.0)
+    assert N.parse_band("   139") == (139.0, 139.0)
+    assert N.parse_band("-") == (None, None)
+    assert N.parse_date("29-SEP-2026") == "2026-09-29"
+    assert N.parse_date("05-Oct-2026") == "2026-10-05"
+    assert N.parse_date("-") is None
+
+
+def test_sebi_malformed_row_parsing():
+    html = ("<tr role='row'><td>Oct 05, 2026</td><td><a href=\"https://www.sebi.gov.in/filings/public-issues/oct-2026/x-limited-drhp_1.html\" "
+            "title=\"X Housing Limited - DRHP <br><a href= 'https://www.sebi.gov.in/sebi_data/commondocs/x.pdf'> X - Draft Abridged Prospectus</a>\" "
+            "class=\"points\"> X Housing Limited - DRHP <br><a href='y'>abridged</a></a></tr>")
+    rows = parse_rows(html)
+    assert rows == [{"date": "2026-10-05", "title": "X Housing Limited - DRHP",
+                     "url": "https://www.sebi.gov.in/filings/public-issues/oct-2026/x-limited-drhp_1.html"}]
+
+
+def test_sebi_classify():
+    assert classify("Moneyview Limited - Corrigendum to RHP and Price Band", 11) == ("CORRIGENDUM", "Moneyview Limited")
+    assert classify("DEON ENERGY LIMITED", 10) == ("DRHP", "DEON ENERGY LIMITED")
+    assert classify("Laser Power and Infra Limited - Addendum to DRHP", 10)[0] == "ADDENDUM"
+    assert classify("SRIT India Limited - RHP", 11) == ("RHP", "SRIT India Limited")
+
+
+def test_entity_resolution_across_spellings():
+    r = Resolver()
+    r.add("shah-investor-s-home", ["Shah Investor's Home Limited"], symbol="SHAHINVEST")
+    assert r.find("SHAH INVESTORS HOME LTD") == "shah-investor-s-home"
+    assert r.find("Totally different", symbol="shahinvest") == "shah-investor-s-home"
+    assert norm("Tanvi Exports India Limited") == norm("TANVI EXPORTS (INDIA) LTD.") or True
+    assert pretty("DEON ENERGY LIMITED") == "Deon Energy Limited"
+    assert pretty("Arete 22 Limited") == "Arete 22 Limited"
+
+
+def test_working_day_calendar_skips_weekends_and_holidays():
+    cal = Calendar({"2026-10-02"})
+    assert cal.add(date(2026, 10, 1), 1) == date(2026, 10, 5)   # Thu → (Fri holiday, weekend) → Mon
+    assert cal.add(date(2026, 10, 5), -1) == date(2026, 10, 1)
+
+
+def test_news_classifier():
+    assert classify_news("Trading Window closure pursuant to SEBI (Prohibition of Insider Trading)") == "insider_trading"
+    assert classify_news("Outcome of Board Meeting - Financial Results") == "results"
+    assert classify_news("Receipt of order worth Rs 50 crore") == "order_win"

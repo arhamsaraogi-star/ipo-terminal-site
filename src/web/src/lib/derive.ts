@@ -3,8 +3,11 @@ import { daysUntil, fv, fyYear, isoToday } from './format'
 import type { CompanyRecord, Event, Fact, Lockin, Vault } from './types'
 
 export const ipo = (r: CompanyRecord) => r.offerings.find(o => o.type === 'IPO')
-export const firstEvent = (r: CompanyRecord, t: string) =>
-  r.events.filter(e => e.event_type === t && e.date_kind !== 'derived').sort((a, b) => a.date.localeCompare(b.date))[0]
+/** Earliest event of a type; confirmed (actual/scheduled) dates win over derived T+N estimates. */
+export const firstEvent = (r: CompanyRecord, t: string) => {
+  const all = r.events.filter(e => e.event_type === t).sort((a, b) => a.date.localeCompare(b.date))
+  return all.find(e => e.date_kind !== 'derived') ?? all[0]
+}
 export const eventDate = (r: CompanyRecord, t: string) => firstEvent(r, t)?.date ?? null
 
 export function priceBand(r: CompanyRecord): string {

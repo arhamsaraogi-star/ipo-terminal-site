@@ -19,10 +19,13 @@ export interface Company {
   private_tracker?: { confidence: string; expected_timing?: string | null; sources?: Source[] } | null
   overview?: { summary: string; segments?: string[]; source?: Source } | null
   website?: string | null; ir_url?: string | null; is_sample?: boolean; updated_at: string
+  drhp_status?: string | null; sources?: string[]; promoters?: string[]
 }
 export interface Offering {
   offering_id: string; company_id: string; type: string; segment: string; exchanges?: string[]
-  facts: Record<string, Fact>; intermediaries?: { brlms?: string[]; registrar?: string | null }
+  facts: Record<string, Fact>; intermediaries?: { brlms?: string[]; registrar?: string | null
+    contacts?: { name: string; role: 'BRLM' | 'REGISTRAR'; contact_person?: string | null; email?: string | null; phone?: string | null; source?: Source }[] }
+  subscription?: { total_times?: number | null; as_of?: string | null } | null
 }
 export interface Doc {
   document_id: string; doc_type: string; title?: string | null; url: string; source?: string
@@ -51,7 +54,8 @@ export interface CompanyRecord {
   documents: Doc[]; events: Event[]; lockins: Lockin[]; news: News[]
 }
 export interface Vault {
-  meta: { built_at: string; schema_version: number; companies: number; has_sample: boolean; repo?: string | null }
+  meta: { built_at: string; schema_version: number; companies: number; has_sample: boolean; repo?: string | null
+    ingest?: { ran_at: string; companies: number; changes: number; log: string[]; failures: string[] } | null }
   event_types: Record<string, { label: string; group: string; order: number }>
   companies: CompanyRecord[]; changes: Change[]
   portfolio: { holdings: Holding[]; watchlist: string[] }; review: string[]

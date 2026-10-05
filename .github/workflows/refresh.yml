@@ -1,0 +1,93 @@
+# Live refresh — the whole terminal runs from this one public repo.
+#   state branch : encrypted pipeline data (AES-256-GCM, TERMINAL_PASSPHRASE)
+#   GitHub Pages : app shell + encrypted vault (no plaintext anywhere)
+# Required: repo secret TERMINAL_PASSPHRASE; Settings → Pages → Source: GitHub Actions.
+name: Refresh
+on:
+  schedule:
+    - cron: "*/15 0-18 * * *"     # every 15 min, 05:30–00:15 IST (SEBI / NSE post filings in Indian hours)
+    - cron: "0 19-23 * * *"       # hourly overnight
+  workflow_dispatch:
+    inputs:
+      full: { description: "Full sweep (all news, larger PDF budget)", type: boolean, default: false }
+  push:
+    branches: [main]
+    paths: ["src/**", "rules/**", "schemas/**", "config/**", ".github/workflows/refresh.yml"]
+concurrency:
+  group: refresh
+  cancel-in-progress: false
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      TERMINAL_PASSPHRASE: ${{ secrets.TERMINAL_PASSPHRASE }}
+      PYTHONPATH: src
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
+      - name: Check secret
+        run: test -n "$TERMINAL_PASSPHRASE" || (echo "::error::Add the TERMINAL_PASSPHRASE repository secret" && exit 1)
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install -r requirements.txt
+      - name: Restore encrypted state
+        id: state
+        run: |
+          if git fetch --depth 1 origin state 2>/dev/null && git show origin/state:state.enc > state.enc 2>/dev/null; then
+            python -m pipeline.build.state unpack state.enc && echo "fresh=false" >> $GITHUB_OUTPUT
+          else
+            echo "No state yet — first run will backfill 6 months"; echo "fresh=true" >> $GITHUB_OUTPUT
+          fi
+      - name: Ingest SEBI + NSE (Mainboard and SME)
+        env:
+          FULL: ${{ inputs.full == true || steps.state.outputs.fresh == 'true' || github.event.schedule == '0 19-23 * * *' }}
+        run: |
+          ARGS="--days 183"
+          [ "${{ steps.state.outputs.fresh }}" = "true" ] && ARGS="$ARGS --backfill"
+          if [ "$FULL" = "true" ]; then ARGS="$ARGS --news-companies 400 --cover-budget 400 --pdf-budget 600"
+          else ARGS="$ARGS --news-companies 60 --cover-budget 25 --pdf-budget 60"; fi
+          python -m pipeline.ingestion.run $ARGS
+      - name: Validation gate
+        id: gate
+        run: |
+          python -m pytest -q
+          python -m pipeline.build.compile --check --changed-flag changed.txt
+          echo "changed=$(cat changed.txt)" >> $GITHUB_OUTPUT
+      - name: Save encrypted state (orphan branch, single commit)
+        run: |
+          python -m pipeline.build.state pack state.enc
+          git config user.name "ipo-terminal-bot"
+          git config user.email "ipo-terminal-bot@users.noreply.github.com"
+          tmp=$(mktemp -d); cp state.enc "$tmp/"; cd "$tmp"
+          git init -q -b state && git add state.enc && git commit -qm "state $(date -u +%FT%TZ)"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" state
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.changed == 'true' || github.event_name != 'schedule'
+        with: { node-version: 22, cache: npm, cache-dependency-path: src/web/package-lock.json }
+      - name: Build encrypted vault + app
+        if: steps.gate.outputs.changed == 'true' || github.event_name != 'schedule'
+        run: |
+          python -m pipeline.build.compile --out src/web/public/vault.bin
+          cd src/web && npm ci --no-audit --no-fund && npx vite build
+      - name: Refuse to publish plaintext
+        if: steps.gate.outputs.changed == 'true' || github.event_name != 'schedule'
+        run: |
+          head -c 5 src/web/dist/vault.bin | grep -q IPOV1
+          ! grep -rIl -e '"company_id"' src/web/dist
+          ! find src/web/dist -name '*.json' ! -name 'vault-meta.json' | grep .
+      - uses: actions/configure-pages@v5
+        if: steps.gate.outputs.changed == 'true' || github.event_name != 'schedule'
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.gate.outputs.changed == 'true' || github.event_name != 'schedule'
+        with: { path: src/web/dist }
+      - id: deploy
+        if: steps.gate.outputs.changed == 'true' || github.event_name != 'schedule'
+        uses: actions/deploy-pages@v4

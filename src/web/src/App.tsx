@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type F
 import Fuse from 'fuse.js'
 import { decryptWithKey, forgetKey, openVault, parseVault, recallKey, rememberKey } from './lib/vault'
 import type { CompanyRecord, Vault } from './lib/types'
-import { fmtDateTime } from './lib/format'
+import { daysUntil, fmtDateTime } from './lib/format'
 import { allLockins, upcomingEvents } from './lib/derive'
 import Dashboard from './pages/Dashboard'
 import Pipeline from './pages/Pipeline'
@@ -12,10 +12,14 @@ import Calendar from './pages/Calendar'
 import { Changes, Filings, NewsPage, Review } from './pages/Feeds'
 import { Listed, PrivateTracker } from './pages/Lists'
 import Portfolio from './pages/Portfolio'
+import AnchorDesk from './pages/AnchorDesk'
+import { loadPf, savePf, type Pf } from './lib/portfolio'
 
 // ───────── data context ─────────
 const Ctx = createContext<Vault | null>(null)
 export const useVault = () => useContext(Ctx)!
+const PfCtx = createContext<{ pf: Pf; setPf: (p: Pf) => void } | null>(null)
+export const usePf = () => useContext(PfCtx)!
 
 // ───────── hash router (no company names ever appear in server-visible URLs) ─────────
 export function useRoute() {
@@ -26,12 +30,36 @@ export function useRoute() {
 export const go = (path: string) => { location.hash = path }
 
 const VAULT_URL = `${import.meta.env.BASE_URL}vault.bin`
+const META_URL = `${import.meta.env.BASE_URL}vault-meta.json`
 
 export default function App() {
   const [vault, setVault] = useState<Vault | null>(null)
   const [buf, setBuf] = useState<ArrayBuffer | null>(null)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
+  const keyRef = useRef<CryptoKey | null>(null)
+  const [updated, setUpdated] = useState<string | null>(null)
+  const [pf, setPfState] = useState<Pf>(loadPf)
+  const setPf = (p: Pf) => { setPfState(p); savePf(p) }
+  const view = useMemo(() => vault ? { ...vault, portfolio: pf } : null, [vault, pf])
+
+  // Live refresh: whenever a newer build is published, fetch + decrypt it in place (no reload, no re-login).
+  useEffect(() => {
+    if (!vault) return
+    const check = async () => {
+      try {
+        const m = await (await fetch(`${META_URL}?t=${Date.now()}`, { cache: 'no-store' })).json()
+        if (!m.built_at || m.built_at === vault.meta.built_at || !keyRef.current) return
+        const b = await (await fetch(`${VAULT_URL}?t=${Date.now()}`, { cache: 'no-store' })).arrayBuffer()
+        setVault(await decryptWithKey<Vault>(parseVault(b), keyRef.current))
+        setUpdated(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }))
+      } catch { /* offline or mid-deploy: try again next tick */ }
+    }
+    const id = setInterval(check, 120_000)
+    const onFocus = () => { if (document.visibilityState === 'visible') check() }
+    document.addEventListener('visibilitychange', onFocus)
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onFocus) }
+  }, [vault])
 
   useEffect(() => {
     fetch(`${VAULT_URL}?t=${Date.now()}`, { cache: 'no-store' })
@@ -40,7 +68,7 @@ export default function App() {
         setBuf(b)
         const h = parseVault(b)
         const key = await recallKey(h.salt)
-        if (key) { try { setVault(await decryptWithKey<Vault>(h, key)) } catch { await forgetKey() } }
+        if (key) { try { setVault(await decryptWithKey<Vault>(h, key)); keyRef.current = key } catch { await forgetKey() } }
       })
       .catch(e => setErr(String(e.message ?? e)))
   }, [])
@@ -51,16 +79,17 @@ export default function App() {
     try {
       const { data, key } = await openVault<Vault>(buf, pw)
       if (remember) await rememberKey(key, parseVault(buf).salt)
+      keyRef.current = key
       setVault(data)
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
-  async function lock() { await forgetKey(); setVault(null); location.hash = '/' }
+  async function lock() { await forgetKey(); keyRef.current = null; setVault(null); location.hash = '/' }
 
   return (
     <>
       <div className="ambient" aria-hidden><i /><i /><i /><i /></div>
       {vault
-        ? <Ctx.Provider value={vault}><Shell onLock={lock} /></Ctx.Provider>
+        ? <Ctx.Provider value={view}><PfCtx.Provider value={{ pf, setPf }}><Shell onLock={lock} updated={updated} /></PfCtx.Provider></Ctx.Provider>
         : <Login onUnlock={unlock} err={err} busy={busy} ready={!!buf} />}
     </>
   )
@@ -96,6 +125,7 @@ function Login({ onUnlock, err, busy, ready }: { onUnlock: (pw: string, r: boole
 
 const NAV: { path: string; label: string; icon: string }[] = [
   { path: '/', label: 'Dashboard', icon: '◉' },
+  { path: '/anchor', label: 'Anchor Desk', icon: '⚓' },
   { path: '/portfolio', label: 'Portfolio', icon: '★' },
   { path: '/pipeline', label: 'IPO Pipeline', icon: '▤' },
   { path: '/upcoming', label: 'Upcoming IPOs', icon: '↗' },
@@ -109,7 +139,7 @@ const NAV: { path: string; label: string; icon: string }[] = [
   { path: '/review', label: 'Needs Review', icon: '⚠' },
 ]
 
-function Shell({ onLock }: { onLock: () => void }) {
+function Shell({ onLock, updated }: { onLock: () => void; updated: string | null }) {
   const v = useVault()
   const route = useRoute()
   const [menu, setMenu] = useState(false)
@@ -118,6 +148,7 @@ function Shell({ onLock }: { onLock: () => void }) {
     '/lockins': allLockins(v).filter(x => x.d >= 0 && x.d <= 30).length,
     '/upcoming': upcomingEvents(v, 30, ['ISSUE_OPEN']).length,
     '/review': v.review.length,
+    '/anchor': v.companies.filter(r => r.events.some(e => ['DRHP_FILED', 'UDRHP_FILED'].includes(e.event_type) && daysUntil(e.date) >= -7 && daysUntil(e.date) <= 0)).length,
   }
   useEffect(() => setMenu(false), [route])
 
@@ -125,6 +156,7 @@ function Shell({ onLock }: { onLock: () => void }) {
   const page = (() => {
     switch ('/' + (seg ?? '')) {
       case '/': return <Dashboard />
+      case '/anchor': return <AnchorDesk />
       case '/portfolio': return <Portfolio />
       case '/pipeline': return <Pipeline mode="all" />
       case '/upcoming': return <Pipeline mode="upcoming" />
@@ -159,7 +191,10 @@ function Shell({ onLock }: { onLock: () => void }) {
             ))}
           </nav>
           <div className="mt-auto pt-4 text-xs muted px-2">
+            {v.meta.ingest ? <>Data pulled {fmtDateTime(v.meta.ingest.ran_at)} IST<br /></> : null}
             Built {fmtDateTime(v.meta.built_at)} IST<br />{v.meta.companies} companies
+            {updated && <><br /><span className="pos">● Live-updated at {updated}</span></>}
+            {!!v.meta.ingest?.failures.length && <><br /><a href="#/review" className="warn">{v.meta.ingest.failures.length} source issue(s)</a></>}
             <button className="btn w-full justify-center mt-3" onClick={onLock}>Lock</button>
           </div>
         </div>

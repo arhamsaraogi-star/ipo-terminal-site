@@ -2,7 +2,7 @@
 name = "ipo-terminal-pipeline"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["jsonschema>=4.21", "referencing>=0.35", "pyyaml>=6", "cryptography>=42"]
+dependencies = ["jsonschema>=4.21", "referencing>=0.35", "pyyaml>=6", "cryptography>=42", "requests>=2.31"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]

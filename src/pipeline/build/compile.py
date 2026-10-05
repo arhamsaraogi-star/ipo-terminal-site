@@ -76,7 +76,8 @@ def build_payload(data: Path = DATA, write_derived: bool = True) -> tuple[dict, 
 
     payload = {
         "meta": {"built_at": now_ist(), "schema_version": SCHEMA_VERSION, "companies": len(companies),
-                 "has_sample": any(c["company"].get("is_sample") for c in companies)},
+                 "has_sample": any(c["company"].get("is_sample") for c in companies),
+                 "ingest": read_json(data / "index" / "ingest_status.json", None)},
         "event_types": event_types(),
         "companies": companies,
         "changes": changes[:1000],
@@ -90,6 +91,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, help="vault output path")
     ap.add_argument("--check", action="store_true", help="validate only")
+    ap.add_argument("--changed-flag", type=Path, help="write true/false: has the published content changed since last deploy")
     a = ap.parse_args(argv)
 
     payload, report = build_payload(write_derived=not a.check)
@@ -101,6 +103,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"validation failed: {len(report.errors)} error(s) — nothing built")
         return 1
     print(f"ok: {payload['meta']['companies']} companies, {len(report.warnings)} warning(s)")
+    if a.changed_flag:
+        import hashlib, json as _j
+        body = {**payload, "meta": {k: v for k, v in payload["meta"].items() if k not in ("built_at", "ingest")}}
+        h = hashlib.sha256(_j.dumps(body, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+        hp = DATA / "index" / "payload_hash"
+        changed = not hp.exists() or hp.read_text().strip() != h
+        hp.parent.mkdir(parents=True, exist_ok=True)
+        hp.write_text(h)
+        a.changed_flag.write_text("true" if changed else "false")
+        print(f"published content changed: {changed}")
     if a.check or not a.out:
         return 0
 

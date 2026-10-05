@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { useVault } from '../App'
+import { usePf, useVault } from '../App'
 import { Card, FactValue, Kpi, Pill, SourceLine, Stage, Table } from '../components/ui'
-import { byId, finTable, ipo, isHeld, isWatched, issuePrice, issueSize, latest, nextLockin, portfolioIssueUrl, priceBand, valuationInputs } from '../lib/derive'
+import { byId, finTable, ipo, isHeld, isWatched, issuePrice, issueSize, latest, nextLockin, priceBand, valuationInputs } from '../lib/derive'
 import { cagr, crore, daysUntil, fmtDate, fmtDateTime, fv, fyYear, humanize, pct, urgency } from '../lib/format'
 import type { CompanyRecord, Fact } from '../lib/types'
 import { holder } from './Dashboard'
@@ -12,13 +12,13 @@ type Tab = typeof TABS[number]
 
 export default function CompanyPage({ id }: { id: string }) {
   const v = useVault()
+  const { pf, setPf } = usePf()
   const r = byId(v, id)
   const [tab, setTab] = useState<Tab>('Overview')
   if (!r) return <div className="glass p-10">Company not found. <a href="#/pipeline">Back to pipeline</a></div>
   const c = r.company
   const held = isHeld(v, id), watched = isWatched(v, id)
-  const addUrl = portfolioIssueUrl(v.meta.repo, held ? 'remove' : 'add', id)
-  const watchUrl = portfolioIssueUrl(v.meta.repo, watched ? 'unwatch' : 'watch', id)
+  const [form, setForm] = useState(false)
 
   return (
     <div className="space-y-5">
@@ -35,12 +35,11 @@ export default function CompanyPage({ id }: { id: string }) {
             <p className="muted mt-1">{[c.sector, c.industry, c.identifiers.nse_symbol && `NSE: ${c.identifiers.nse_symbol}`, c.identifiers.bse_code && `BSE: ${c.identifiers.bse_code}`, c.identifiers.cin && `CIN ${c.identifiers.cin}`].filter(Boolean).join(' · ')}</p>
           </div>
           <div className="flex gap-2 flex-wrap">
-            <a className="btn btn-primary" href={addUrl ?? undefined} target="_blank" rel="noreferrer" aria-disabled={!addUrl}
-              title={addUrl ? 'Opens a pre-filled GitHub issue; the portfolio workflow updates holdings' : 'Repository not configured'}>
-              {held ? '★ Update / remove holding' : '★ Add to portfolio'}</a>
-            <a className="btn" href={watchUrl ?? undefined} target="_blank" rel="noreferrer">{watched ? '☆ Unwatch' : '☆ Watch'}</a>
+            <button className="btn btn-primary" onClick={() => setForm(f => !f)}>{held ? '★ Edit holding' : '★ Add to portfolio'}</button>
+            <button className="btn" onClick={() => setPf({ ...pf, watchlist: watched ? pf.watchlist.filter(x => x !== id) : [...pf.watchlist, id] })}>{watched ? '☆ Unwatch' : '☆ Watch'}</button>
           </div>
         </div>
+        {form && <HoldingForm id={id} onDone={() => setForm(false)} />}
         <div className="seg mt-5">{TABS.map(t => <button key={t} aria-pressed={tab === t} onClick={() => setTab(t)}>{t}</button>)}</div>
       </header>
 
@@ -66,7 +65,7 @@ function Overview({ r }: { r: CompanyRecord }) {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        <Kpi label="Issue size" value={crore(issueSize(r))} sub={priceBand(r) !== '—' ? `Band ${priceBand(r)}` : 'Price band not yet announced'} />
+        <Kpi label="Issue size" value={issueSize(r) != null ? <FactValue f={ipo(r)?.facts.total_issue ?? ipo(r)?.facts.fresh_issue} /> : '—'} sub={priceBand(r) !== '—' ? `Band ${priceBand(r)}` : 'Price band not yet announced'} />
         <Kpi label={`Revenue ${rev?.period ?? ''}`} value={<FactValue f={rev} />} sub={revCagr(r)} />
         <Kpi label="EBITDA margin" value={pct(margin)} sub={<span>calculated · EBITDA <FactValue f={ebitda} /></span>} />
         <Kpi label={`PAT ${pat?.period ?? ''}`} value={<FactValue f={pat} />} tone={(fv(pat) ?? 0) < 0 ? 'neg' : ''}
@@ -79,6 +78,7 @@ function Overview({ r }: { r: CompanyRecord }) {
           <p className="muted text-xs mt-3">Source: <SourceLine s={r.company.overview.source} /></p>
         </> : <p className="muted">Not available — no offer document processed yet.</p>}
       </Card>
+      <DealTeam r={r} />
       {r.company.private_tracker && (
         <Card title="IPO intent" solid>
           <p><Pill tone="violet">{humanize(r.company.private_tracker.confidence)}</Pill> <span className="ink2 ml-2">Expected timing: {r.company.private_tracker.expected_timing ?? 'not stated'}</span></p>
@@ -128,6 +128,9 @@ function IpoTab({ r }: { r: CompanyRecord }) {
           <div>Exchanges: <b>{o.exchanges?.join(', ') || '—'}</b></div>
           <div>BRLMs: <b>{o.intermediaries?.brlms?.join(', ') || '—'}</b></div>
           <div>Registrar: <b>{o.intermediaries?.registrar ?? '—'}</b></div>
+          {o.subscription?.total_times != null && <div className="mt-3"><span className="eyebrow block">Subscription (NSE, total)</span>
+            <span className="display text-[30px] font-semibold">{o.subscription.total_times.toFixed(2)}x</span>
+            <span className="muted text-xs block">as of {fmtDateTime(o.subscription.as_of)}</span></div>}
         </div>
       </Card>
     </div>
@@ -342,5 +345,61 @@ function ChangesTab({ r }: { r: CompanyRecord }) {
         { key: 's', label: 'Source', render: c => <SourceLine s={c.source} /> },
       ]} />
     </Card>
+  )
+}
+
+function DealTeam({ r }: { r: CompanyRecord }) {
+  const o = ipo(r)
+  const contacts = o?.intermediaries?.contacts ?? []
+  const F = o?.facts ?? {}
+  const rows = ['offer_type', 'drhp_fresh_issue', 'drhp_ofs', 'drhp_total_issue', 'drhp_fresh_issue_shares', 'drhp_ofs_shares', 'drhp_total_issue_shares',
+    'eligibility_regulation', 'anchor_portion_contemplated', 'pre_ipo_placement_contemplated', 'drhp_dated'].filter(k => F[k])
+  if (!contacts.length && !rows.length && !r.company.promoters?.length) return null
+  return (
+    <div className="grid xl:grid-cols-2 gap-5">
+      <Card title="Deal team (offer-document cover)" solid>
+        <Table rows={contacts} empty="Not extracted yet" cols={[
+          { key: 'r', label: 'Role', render: c => <Pill tone={c.role === 'BRLM' ? 'blue' : 'slate'}>{c.role === 'BRLM' ? 'Lead manager' : 'Registrar'}</Pill> },
+          { key: 'n', label: 'Firm', render: c => <b>{c.name}</b> },
+          { key: 'p', label: 'Contact', render: c => <div className="text-sm">{c.contact_person ?? ''}{c.phone && <div className="muted">{c.phone}</div>}</div> },
+          { key: 'e', label: 'Email', render: c => c.email ? <a href={`mailto:${c.email}?subject=${encodeURIComponent(`Anchor interest — ${r.company.name} IPO`)}`}>{c.email}</a> : '—' },
+        ]} />
+        {contacts[0]?.source && <p className="muted text-xs mt-2">Source: <SourceLine s={contacts[0].source} /></p>}
+      </Card>
+      <Card title="Offer as filed" solid>
+        <Table rows={rows.map(k => F[k])} cols={[
+          { key: 'm', label: 'Item', render: f => f.label ?? humanize(f.metric) },
+          { key: 'v', label: 'Value', right: true, render: f => typeof f.value === 'boolean' ? (f.value ? 'Yes' : 'No') : <FactValue f={f} /> },
+        ]} />
+        {!!r.company.promoters?.length && <p className="text-sm mt-3"><span className="eyebrow">Promoters</span><br />{r.company.promoters.join(', ')}</p>}
+      </Card>
+    </div>
+  )
+}
+
+function HoldingForm({ id, onDone }: { id: string; onDone: () => void }) {
+  const { pf, setPf } = usePf()
+  const cur = pf.holdings.find(h => h.company_id === id)
+  const [q, setQ] = useState(String(cur?.quantity ?? ''))
+  const [c, setC] = useState(String(cur?.avg_cost ?? ''))
+  const [d, setD] = useState(cur?.acquired_on ?? new Date().toISOString().slice(0, 10))
+  const [route, setRoute] = useState(cur?.route ?? 'ANCHOR')
+  const save = () => {
+    const quantity = Number(q.replace(/,/g, '')), avg_cost = Number(c.replace(/[,₹]/g, ''))
+    if (!(quantity > 0) || !(avg_cost >= 0)) return
+    setPf({ ...pf, holdings: [...pf.holdings.filter(h => h.company_id !== id), { company_id: id, quantity, avg_cost, acquired_on: d, route }] })
+    onDone()
+  }
+  return (
+    <div className="glass panel p-4 mt-4 grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
+      <label className="text-sm">Quantity<input className="input mt-1" value={q} onChange={e => setQ(e.target.value)} inputMode="numeric" /></label>
+      <label className="text-sm">Avg cost ₹<input className="input mt-1" value={c} onChange={e => setC(e.target.value)} inputMode="decimal" /></label>
+      <label className="text-sm">Date<input className="input mt-1" type="date" value={d} onChange={e => setD(e.target.value)} /></label>
+      <label className="text-sm">Route<select className="input mt-1" value={route} onChange={e => setRoute(e.target.value)}>
+        {['ANCHOR', 'ALLOTMENT', 'PRE_IPO', 'MARKET'].map(x => <option key={x}>{x}</option>)}</select></label>
+      <div className="flex gap-2"><button className="btn btn-primary" onClick={save}>Save</button>
+        {cur && <button className="btn" onClick={() => { setPf({ ...pf, holdings: pf.holdings.filter(h => h.company_id !== id) }); onDone() }}>Remove</button>}</div>
+      <p className="muted text-xs col-span-full">Stored only in this browser. Use Portfolio → Export to move it to another device.</p>
+    </div>
   )
 }

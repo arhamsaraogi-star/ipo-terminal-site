@@ -1,8 +1,9 @@
 import { useVault, go } from '../App'
 import { Card, Kpi, Pill, Stage, Table } from '../components/ui'
-import { allLockins, byId, eventDate, issueSize, priceBand, upcomingEvents } from '../lib/derive'
+import { allLockins, byId, eventDate, ipo, issueSize, priceBand, upcomingEvents } from '../lib/derive'
 import { crore, daysUntil, fmtDate, fmtDateTime, pct, urgency } from '../lib/format'
 import { HoldingsTable } from './Portfolio'
+import { brlms, dealSize, filedOn } from './AnchorDesk'
 import type { CompanyRecord } from '../lib/types'
 
 export default function Dashboard() {
@@ -32,6 +33,9 @@ export default function Dashboard() {
         <Kpi label="Unlocks · next 30 days" value={unlocks.length} tone={unlocks.some(x => x.d < 7) ? 'neg' : ''}
           sub={unlocks.length ? `${pct(unlockPct)} of post-issue equity, combined` : 'None'} />
       </div>
+
+      <NewFilings />
+      <OpenNow />
 
       <Card title="My IPO investments" action={<a className="btn" href="#/portfolio">Open portfolio →</a>}>
         <HoldingsTable />
@@ -116,3 +120,38 @@ export const holder = (c: string) => ({
 } as Record<string, string>)[c] ?? c
 
 function greeting() { const h = new Date().getHours(); return h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening' }
+
+function OpenNow() {
+  const v = useVault()
+  const rows = v.companies.filter(r => ['ISSUE_OPEN', 'ISSUE_ANNOUNCED', 'ISSUE_CLOSED'].includes(r.company.lifecycle))
+    .sort((a, b) => (eventDate(a, 'ISSUE_OPEN') ?? '').localeCompare(eventDate(b, 'ISSUE_OPEN') ?? ''))
+  if (!rows.length) return null
+  return (
+    <Card title="Open, upcoming and awaiting listing" action={<a className="btn" href="#/upcoming">All upcoming →</a>} solid>
+      <Table rows={rows} onRow={r => go(`/company/${r.company.company_id}`)} cols={[
+        { key: 'c', label: 'Company', render: r => <div><b>{r.company.name}</b><div className="muted text-xs">{r.company.segment === 'SME' ? 'SME' : 'Mainboard'}{r.company.identifiers.nse_symbol ? ` · ${r.company.identifiers.nse_symbol}` : ''}</div></div> },
+        { key: 's', label: 'Stage', render: r => <Stage s={r.company.lifecycle} /> },
+        { key: 'pb', label: 'Price band', right: true, render: r => priceBand(r) },
+        { key: 'sz', label: 'Issue size', right: true, render: r => crore(issueSize(r)) },
+        { key: 'o', label: 'Open → close', right: true, render: r => `${fmtDate(eventDate(r, 'ISSUE_OPEN'), false)} → ${fmtDate(eventDate(r, 'ISSUE_CLOSE'), false)}` },
+        { key: 'sub', label: 'Subscribed', right: true, render: r => { const x = ipo(r)?.subscription?.total_times; return x == null ? '—' : <b>{x.toFixed(1)}x</b> } },
+        { key: 'l', label: 'Listing', right: true, render: r => fmtDate(r.events.find(e => e.event_type === 'LISTING')?.date, false) },
+      ]} />
+    </Card>
+  )
+}
+
+function NewFilings() {
+  const v = useVault()
+  const rows = v.companies.filter(r => { const d = filedOn(r); return d && -daysUntil(d) <= 3 }).sort((a, b) => filedOn(b)!.localeCompare(filedOn(a)!))
+  return (
+    <Card title="New offer documents · last 3 days" action={<a className="btn btn-primary" href="#/anchor">Anchor Desk →</a>} solid>
+      <Table rows={rows} onRow={r => go(`/company/${r.company.company_id}`)} empty="No new DRHPs in the last 3 days" cols={[
+        { key: 'f', label: 'Filed', render: r => { const n = -daysUntil(filedOn(r)!); return n === 0 ? <Pill tone="green">Today</Pill> : `${n}d ago` } },
+        { key: 'c', label: 'Company', render: r => <div><b>{r.company.name}</b><div className="muted text-xs">{r.company.segment === 'SME' ? 'SME' : 'Mainboard'}</div></div> },
+        { key: 's', label: 'Size', right: true, render: r => dealSize(r).text },
+        { key: 'b', label: 'Lead managers', render: r => brlms(r).map(b => b.name.replace(/ (Private )?Limited$/i, '')).join(', ') || <span className="muted">reading cover…</span> },
+      ]} />
+    </Card>
+  )
+}

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useVault, go } from '../App'
 import { Card, PageHead, Seg, Stage, Table } from '../components/ui'
-import { eventDate, isHeld, isWatched, issueSize, priceBand } from '../lib/derive'
+import { eventDate, ipo, isHeld, isWatched, issueSize, priceBand } from '../lib/derive'
 import { STAGE, crore, daysUntil, fmtDate } from '../lib/format'
 
 type Seg_ = 'ALL' | 'MAINBOARD' | 'SME'
@@ -41,11 +41,12 @@ export default function Pipeline({ mode }: { mode: 'all' | 'upcoming' }) {
           { key: 'c', label: 'Company', sort: r => r.company.name, render: r => <div className="flex items-center gap-2">
             {isHeld(v, r.company.company_id) && <span title="In portfolio" style={{ color: '#f5a623' }}>★</span>}
             {!isHeld(v, r.company.company_id) && isWatched(v, r.company.company_id) && <span title="Watching" className="muted">☆</span>}
-            <div><b>{r.company.name}</b><div className="muted text-xs">{r.company.segment === 'SME' ? 'SME · ' : ''}{r.company.industry}</div></div></div> },
+            <div><b>{r.company.name}</b><div className="muted text-xs">{r.company.segment === 'SME' ? 'SME' : r.company.segment === 'MAINBOARD' ? 'Mainboard' : ''}{r.company.identifiers.nse_symbol ? ` · ${r.company.identifiers.nse_symbol}` : ''}{r.company.drhp_status ? ` · ${r.company.drhp_status}` : ''}</div></div></div> },
           { key: 'stage', label: 'Stage', sort: r => STAGE[r.company.lifecycle].rank, render: r => <Stage s={r.company.lifecycle} /> },
           { key: 'sec', label: 'Sector', sort: r => r.company.sector ?? '', render: r => r.company.sector ?? '—' },
           { key: 'sz', label: 'Issue size', right: true, sort: r => issueSize(r), render: r => crore(issueSize(r)) },
           { key: 'pb', label: 'Price band', right: true, render: r => priceBand(r) },
+          { key: 'sub', label: 'Subs.', right: true, sort: r => ipo(r)?.subscription?.total_times ?? null, render: r => { const x = ipo(r)?.subscription?.total_times; return x == null ? '—' : `${x.toFixed(1)}x` } },
           ...(['DRHP_FILED', 'RHP_FILED', 'ANCHOR_BIDDING', 'ISSUE_OPEN', 'LISTING'] as const).map(t => ({
             key: t, label: { DRHP_FILED: 'DRHP', RHP_FILED: 'RHP', ANCHOR_BIDDING: 'Anchor', ISSUE_OPEN: 'Opens', LISTING: 'Listing' }[t],
             right: true, sort: (r: typeof rows[number]) => eventDate(r, t), render: (r: typeof rows[number]) => fmtDate(eventDate(r, t), false),

@@ -1,54 +1,17 @@
-# One-time GitHub setup (≈10 minutes)
+# Going live (one-time, ≈3 minutes)
 
-## 1. Create two repositories
+Everything runs from the **public** repo `ipo-terminal-site`. The private `ipo-terminal` repo is not needed (keep it as a backup or delete it).
 
-| Repo | Visibility | Purpose |
-|---|---|---|
-| `ipo-terminal` | **Private** | Everything: code, data, workflows |
-| `ipo-terminal-site` | Public | Receives only the encrypted build; serves GitHub Pages |
+1. **Push the code** (from the `ipo-terminal` folder on your computer):
+   ```
+   git remote add origin https://github.com/arhamsaraogi-star/ipo-terminal-site.git
+   git push -u origin main
+   ```
+2. **Add the password**: repo → Settings → Secrets and variables → Actions → New repository secret
+   - Name `TERMINAL_PASSPHRASE`, value = your terminal password (5+ random words). It exists nowhere else.
+3. **Turn on Pages**: Settings → Pages → Build and deployment → Source: **GitHub Actions**.
+4. **First run**: Actions → **Refresh** → Run workflow (tick "Full sweep"). The first run backfills six months (SEBI + NSE, Mainboard + SME, offer-document covers) and takes 15–30 minutes.
 
-Create both empty (no README).
+Live at `https://arhamsaraogi-star.github.io/ipo-terminal-site/`. After that it refreshes every 15 minutes on its own; an open terminal updates in place.
 
-## 2. Push this code to the private repo
-
-```bash
-cd "IPO Monitor/ipo-terminal"
-git remote add origin https://github.com/<you>/ipo-terminal.git
-git push -u origin main
-```
-
-## 3. Deploy token (lets the private repo publish to the site repo)
-
-GitHub → Settings → Developer settings → Fine-grained tokens → **Generate new token**
-- Repository access: **Only** `ipo-terminal-site`
-- Permissions: **Contents → Read and write**
-- Copy the token.
-
-## 4. Secrets and variable on the private repo
-
-`ipo-terminal` → Settings → Secrets and variables → Actions
-
-| Kind | Name | Value |
-|---|---|---|
-| Secret | `TERMINAL_PASSPHRASE` | Your terminal password: 5+ random words, at least 12 characters |
-| Secret | `SITE_DEPLOY_TOKEN` | The token from step 3 |
-| Variable | `SITE_REPO` | `<you>/ipo-terminal-site` |
-
-Also: Settings → Actions → General → Workflow permissions → **Read and write**.
-
-## 5. First deploy
-
-Actions → **Deploy** → Run workflow. When it is green:
-
-`ipo-terminal-site` → Settings → Pages → Source: **Deploy from a branch** → `main` / root → Save.
-
-Your terminal is live at `https://<you>.github.io/ipo-terminal-site/`.
-
-## 6. Label for portfolio issues
-
-`ipo-terminal` → Issues → Labels → New label `portfolio`.
-
-## Notes
-
-- The site URL is public, but its content is encrypted. Don't share the passphrase over chat or email.
-- Free plan: private repos get 2,000 Actions minutes per month. Phase 1 uses about 3 minutes per deploy.
+Public repos get unlimited free Actions minutes, which is what makes the 15-minute cadence possible.

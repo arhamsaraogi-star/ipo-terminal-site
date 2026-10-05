@@ -1,30 +1,151 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "offering.schema.json",
-  "title": "Offering — an IPO / FPO / QIP / OFS of a company",
+  "title": "Offering \u2014 an IPO / FPO / QIP / OFS of a company",
   "type": "array",
   "items": {
     "type": "object",
-    "required": ["offering_id", "company_id", "type", "segment", "facts"],
+    "required": [
+      "offering_id",
+      "company_id",
+      "type",
+      "segment",
+      "facts"
+    ],
     "additionalProperties": false,
     "properties": {
-      "offering_id": { "type": "string" },
-      "company_id": { "$ref": "common.schema.json#/$defs/company_id" },
-      "type": { "enum": ["IPO", "FPO", "QIP", "OFS", "RIGHTS", "PREFERENTIAL"] },
-      "segment": { "enum": ["MAINBOARD", "SME", "UNKNOWN"] },
-      "exchanges": { "type": "array", "items": { "enum": ["NSE", "BSE", "NSE_EMERGE", "BSE_SME"] } },
+      "offering_id": {
+        "type": "string"
+      },
+      "company_id": {
+        "$ref": "common.schema.json#/$defs/company_id"
+      },
+      "type": {
+        "enum": [
+          "IPO",
+          "FPO",
+          "QIP",
+          "OFS",
+          "RIGHTS",
+          "PREFERENTIAL"
+        ]
+      },
+      "segment": {
+        "enum": [
+          "MAINBOARD",
+          "SME",
+          "UNKNOWN"
+        ]
+      },
+      "exchanges": {
+        "type": "array",
+        "items": {
+          "enum": [
+            "NSE",
+            "BSE",
+            "NSE_EMERGE",
+            "BSE_SME",
+            "UNKNOWN"
+          ]
+        }
+      },
       "facts": {
         "type": "object",
         "description": "Keyed by metric: fresh_issue, ofs, total_issue, price_band_low, price_band_high, lot_size, face_value, pre_issue_shares, post_issue_shares, promoter_pre_pct, promoter_post_pct, anchor_portion, ...",
-        "additionalProperties": { "$ref": "common.schema.json#/$defs/fact" }
+        "additionalProperties": {
+          "$ref": "common.schema.json#/$defs/fact"
+        }
       },
       "intermediaries": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "brlms": { "type": "array", "items": { "type": "string" } },
-          "registrar": { "type": ["string", "null"] }
+          "brlms": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "registrar": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "contacts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "role": {
+                  "enum": [
+                    "BRLM",
+                    "REGISTRAR"
+                  ]
+                },
+                "contact_person": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "email": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "phone": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "source": {
+                  "$ref": "common.schema.json#/$defs/source"
+                }
+              },
+              "required": [
+                "name",
+                "role"
+              ]
+            }
+          }
         }
+      },
+      "subscription": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "total_times": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "as_of": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source": {
+            "$ref": "common.schema.json#/$defs/source"
+          }
+        }
+      },
+      "detail_fetched_at": {
+        "type": [
+          "string",
+          "null"
+        ]
       }
     }
   }
