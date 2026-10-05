@@ -64,8 +64,8 @@ jobs:
       - name: Save encrypted state (orphan branch, single commit)
         run: |
           python -m pipeline.build.state pack state.enc
-          git config user.name "ipo-terminal-bot"
-          git config user.email "ipo-terminal-bot@users.noreply.github.com"
+          git config --global user.name "ipo-terminal-bot"
+          git config --global user.email "ipo-terminal-bot@users.noreply.github.com"
           tmp=$(mktemp -d); cp state.enc "$tmp/"; cd "$tmp"
           git init -q -b state && git add state.enc && git commit -qm "state $(date -u +%FT%TZ)"
           git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" state
