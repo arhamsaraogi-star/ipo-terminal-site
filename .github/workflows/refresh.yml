@@ -52,8 +52,8 @@ jobs:
         run: |
           ARGS="--days 183"
           [ "${{ steps.state.outputs.fresh }}" = "true" ] && ARGS="$ARGS --backfill"
-          if [ "$FULL" = "true" ]; then ARGS="$ARGS --news-companies 400 --cover-budget 400 --pdf-budget 600"
-          else ARGS="$ARGS --news-companies 60 --cover-budget 25 --pdf-budget 60"; fi
+          if [ "$FULL" = "true" ]; then ARGS="$ARGS --news-companies 400 --cover-budget 400 --pdf-budget 600 --max-minutes 50"
+          else ARGS="$ARGS --news-companies 60 --cover-budget 25 --pdf-budget 60 --max-minutes 12"; fi
           python -m pipeline.ingestion.run $ARGS
       - name: Validation gate
         id: gate

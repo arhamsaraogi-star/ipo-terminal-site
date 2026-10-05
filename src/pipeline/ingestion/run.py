@@ -24,6 +24,13 @@ from pipeline.normalization.entities import Resolver, norm, pretty
 
 VERSION = "ingest-0.2"
 TODAY = date.today()
+_T0 = __import__('time').monotonic()
+BUDGET = [float('inf')]  # seconds, from --max-minutes; every slow loop checks it
+
+
+def out_of_time(frac: float = 1.0) -> bool:
+    """True once `frac` of the run's time budget is used (details 0.4, covers 0.8, news 1.0)."""
+    return __import__('time').monotonic() - _T0 > BUDGET[0] * frac
 WD_NOTE = "working days per T+N listing timeline; exchange holidays applied where published"
 
 
@@ -294,7 +301,7 @@ def ingest_issues(st: State, nse: N.NSE, since: date, cal: Calendar, detail_budg
             upsert_event(b, "LISTING", lst, "actual" if lst <= today else "scheduled", s)
         # issue detail: fetch for live/recent issues or when never fetched
         recent = cl and (TODAY - date.fromisoformat(cl)).days <= 7
-        if detail_budget > 0 and (not o.get("detail_fetched_at") or recent or r["_feed"] != "past"):
+        if detail_budget > 0 and not out_of_time(0.4) and (not o.get("detail_fetched_at") or recent or r["_feed"] != "past"):
             detail_budget -= 1
             try:
                 apply_detail(b, o, nse.detail(sym, "SME" if segment == "SME" else series), s)
@@ -392,6 +399,9 @@ def ingest_news(st: State, nse: N.NSE, max_companies: int) -> None:
     listed.sort(key=lambda b: (b.company["company_id"] not in priority, "".join(chr(255 - ord(c)) for c in listed_on(b))))
     n_new = 0
     for b in listed[:max_companies]:
+        if out_of_time():
+            st.log.append("NSE announcements: stopped early (time budget) — continues next run")
+            break
         sym = b.company["identifiers"]["nse_symbol"]
         try:
             rows = nse.announcements(sym, sme=b.company["segment"] == "SME", since=TODAY - timedelta(days=183))
@@ -513,9 +523,11 @@ def main(argv=None) -> int:
     ap.add_argument("--pdf-budget", type=int, default=400)
     ap.add_argument("--news-companies", type=int, default=250)
     ap.add_argument("--cover-budget", type=int, default=40, help="offer documents to download + extract per run")
+    ap.add_argument("--max-minutes", type=float, default=45, help="hard time budget; slow phases stop early and resume next run")
     ap.add_argument("--skip", default="", help="comma list: sebi,offerdocs,issues,covers,news")
     a = ap.parse_args(argv)
     skip = set(filter(None, a.skip.split(",")))
+    BUDGET[0] = a.max_minutes * 60
     since = TODAY - timedelta(days=a.days)
 
     removed = remove_samples()
@@ -601,7 +613,7 @@ def extract_covers(st: State, client: Client, budget: int, minutes: float = 25) 
             queue.append((max(d.get("filing_date") or "" for d in docs), b, sorted(docs, key=lambda d: (order[d["doc_type"]], d.get("filing_date") or ""))[0]))
     queue.sort(key=lambda x: x[0], reverse=True)
     for _, b, d in queue[:budget]:
-        if time.monotonic() > deadline:
+        if time.monotonic() > deadline or out_of_time(0.8):
             break
         try:
             blob = download(client, d["url"])
