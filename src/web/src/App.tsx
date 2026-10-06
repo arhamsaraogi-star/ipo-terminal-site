@@ -441,9 +441,10 @@ function AccountMenu() {
 
 function SignupNote() {
   const { note } = useSync()
-  const [hide, setHide] = useState(false)
+  const [hide, setHide] = useState(() => { try { return localStorage.getItem('note-ok') === note } catch { return false } })
   if (!note || hide) return null
-  return <div className="glass panel px-5 py-3 mb-5 text-sm flex gap-3 items-center justify-between"><span className="ink2">{note}</span><button className="btn" onClick={() => setHide(true)}>OK</button></div>
+  const ok = () => { setHide(true); try { localStorage.setItem('note-ok', note) } catch { /* noop */ } }
+  return <div className="glass panel px-4 py-2 mb-4 text-xs flex gap-3 items-center justify-between"><span className="ink2">Saved on this device only — cross-device sync isn't switched on yet.</span><button className="btn !h-8" onClick={ok}>OK</button></div>
 }
 
 function SyncLine({ sync }: { sync: SyncState }) {

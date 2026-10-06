@@ -30,7 +30,25 @@ export default function Calendar() {
       <div className="flex flex-wrap gap-4 mb-4 text-sm ink2">
         {Object.entries(GROUP_COLOR).map(([g, c]) => <span key={g}><b style={{ color: c }}>●</b> {g.replace('_', ' ')}</span>)}
       </div>
-      <div className="glass panel p-3 overflow-x-auto">
+      <div className="md:hidden glass panel p-3 space-y-3">
+        {Array.from({ length: days }).map((_, i) => {
+          const iso = `${ym}-${String(i + 1).padStart(2, '0')}`
+          const evs = events.filter(x => x.e.date === iso)
+          if (!evs.length && iso !== t) return null
+          return (
+            <div key={iso}>
+              <div className={`eyebrow mb-1 ${iso === t ? 'pos' : ''}`}>{new Date(iso + 'T00:00:00Z').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}{iso === t ? ' · today' : ''}</div>
+              {evs.length ? evs.map(({ r, e }, k) => (
+                <a key={k} href={`#/company/${r.company.company_id}`} className="flex gap-2 items-center py-1 no-underline" style={{ color: 'var(--ink)' }}>
+                  <b style={{ color: GROUP_COLOR[v.event_types[e.event_type]?.group ?? 'pipeline'] ?? 'var(--accent)' }}>●</b>
+                  <span className="font-medium">{r.company.name.replace(/ (Private )?Limited$/i, '')}</span>
+                  <span className="muted text-sm">· {v.event_types[e.event_type]?.label ?? e.event_type}</span>
+                </a>)) : <div className="muted text-sm">Nothing scheduled</div>}
+            </div>)
+        })}
+        {!events.length && <div className="muted">No milestones this month.</div>}
+      </div>
+      <div className="hidden md:block glass panel p-3 overflow-x-auto">
         <div className="grid grid-cols-7 gap-2 min-w-[760px]">
           {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => <div key={d} className="eyebrow px-2">{d}</div>)}
           {Array.from({ length: lead }).map((_, i) => <div key={'l' + i} />)}
