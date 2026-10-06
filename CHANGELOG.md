@@ -2,7 +2,8 @@
 
 ## 0.6.0 — 2026-10-06 · Live peers, BSE coverage, tracked zone
 - Offer-document peer tables brought up to today's NSE close (price, market cap, P/E and P/B on the document's EPS / NAV)
-- BSE-only IPOs (BSE SME + BSE mainboard) via ipowatch.in (secondary source); BSE prices + listing-day open from the BSE bhavcopy
+- BSE SME DRHPs / RHPs / prospectuses from the exchange's own page (bsesme.com), dated the day they are filed
+- BSE-only issue dates, price bands and sizes via ipowatch.in (secondary source); BSE prices + listing-day open from the BSE bhavcopy
 - Industry charts headline the forecast CAGR (last actual → last projected year)
 - Money shown in ₹ / lakh / crore as it fits; XIRR and CAGR only after ~6 months
 - News: All IPOs = listed ≤ 3 months or filed ≤ 6 months; portfolio and tracked names always show every headline

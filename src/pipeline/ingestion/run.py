@@ -451,6 +451,41 @@ def ingest_news(st: State, nse: N.NSE, max_companies: int) -> None:
     st.log.append(f"NSE announcements: {min(len(listed), max_companies)} listed companies checked, {n_new} new items")
 
 
+# ───────────────────────── BSE SME offer documents (exchange page) ─────────────────────────
+def ingest_bsesme(st: State, client: Client, drhp_since: date) -> None:
+    from pipeline.ingestion import bsesme
+    try:
+        rows = bsesme.fetch(client)
+    except Exception as e:  # noqa: BLE001
+        st.failures.append(f"BSE SME offer documents: {str(e)[:120]}")
+        return
+    new = 0
+    for r in rows:
+        dates = [r[k]["date"] for k in ("drhp", "rhp", "prospectus") if r.get(k) and r[k].get("date")]
+        if not dates or max(dates) < drhp_since.isoformat():
+            continue
+        b = st.company(r["name"], segment="SME", source="BSE-SME")
+        if b.company["segment"] in ("UNKNOWN", None):
+            b.company["segment"] = "SME"
+        b.company.setdefault("sources", [])
+        if "BSE SME" not in b.company["sources"]:
+            b.company["sources"].append("BSE SME")
+        o = offering(b)
+        if "BSE_SME" not in o["exchanges"]:
+            o["exchanges"].append("BSE_SME")
+        for key, doc_type, etype in (("drhp", "DRHP", "DRHP_FILED"), ("rhp", "RHP", "RHP_FILED"), ("prospectus", "PROSPECTUS", "PROSPECTUS_FILED")):
+            x = r.get(key)
+            if not x:
+                continue
+            s_ = src("EXCHANGE_ANNOUNCEMENT", x["url"], table="BSE SME — offer documents")
+            if x.get("date"):
+                if etype == "DRHP_FILED" and not any(e["event_type"] == "DRHP_FILED" for e in b.events):
+                    new += 1
+                upsert_event(b, etype, x["date"], "actual", s_)
+            upsert_doc(b, doc_type, x["url"], x.get("date"), "BSE-SME", title=f"{doc_type} — {r['name']} (BSE SME)")
+    st.log.append(f"BSE SME offer documents: {len(rows)} issuers on the exchange page, {new} new DRHPs in window")
+
+
 # ───────────────────────── BSE-only issues (workaround: secondary aggregator) ─────────────────────────
 def ingest_bse(st: State, client: Client, since: date, budget: int = 60) -> None:
     from pipeline.ingestion import ipowatch as W
@@ -712,7 +747,8 @@ def main(argv=None) -> int:
         print('▶ ingest_issues', flush=True)
         ingest_issues(st, nse, since, cal, a.detail_budget)
     if "bse" not in skip:
-        print('▶ BSE-only issues', flush=True)
+        print('▶ BSE SME offer documents + BSE-only issues', flush=True)
+        ingest_bsesme(st, client, drhp_since)
         ingest_bse(st, client, since)
     enrich_from_equity_lists(st, client, since)
     merged = merge_duplicates(st.bundles)
