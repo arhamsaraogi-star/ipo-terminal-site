@@ -3,7 +3,7 @@ import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAx
 import { usePf, useVault, go } from '../App'
 import { Card, Delta, Kpi, PageHead, Pill, Seg, Stage, Table } from '../components/ui'
 import { byId, cmp, holdingMarks, issuePrice, nextEvent, nextLockin } from '../lib/derive'
-import { crore, daysUntil, fmtDate, fmtDateTime, inr, urgency } from '../lib/format'
+import { money, crore, daysUntil, fmtDate, fmtDateTime, inr, urgency } from '../lib/format'
 import { TRACK, exportPf, importPf, xirr } from '../lib/portfolio'
 import type { CompanyRecord, Holding } from '../lib/types'
 
@@ -23,9 +23,10 @@ export function summary(v: ReturnType<typeof useVault>) {
   const cost = priced.reduce((s, p) => s + p.cost_cr!, 0)
   const value = priced.reduce((s, p) => s + (p.value_cr ?? p.cost_cr!), 0)
   const today = new Date().toISOString().slice(0, 10)
-  const irr = xirr([...priced.map(p => ({ date: p.h.acquired_on, amount: -p.cost_cr! })), { date: today, amount: value }])
+  const yrs = cost ? priced.reduce((s, p) => s + p.cost_cr! * (Date.now() - Date.parse(p.h.acquired_on)) / (365.25 * 864e5), 0) / cost : 0
+  const irr = yrs >= 0.5 ? xirr([...priced.map(p => ({ date: p.h.acquired_on, amount: -p.cost_cr! })), { date: today, amount: value }]) : null
   const unmarked = priced.filter(p => p.value_cr == null).length
-  return { pos, cost, value, gain: value - cost, moic: cost ? value / cost : null, irr, unmarked, missingCost: pos.length - priced.length }
+  return { pos, cost, value, gain: value - cost, moic: cost ? value / cost : null, irr, yrs, unmarked, missingCost: pos.length - priced.length }
 }
 
 export function ReturnsStrip() {
@@ -33,11 +34,11 @@ export function ReturnsStrip() {
   const S = summary(v)
   return (
     <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
-      <Kpi label="Invested" value={crore(S.cost, 1)} sub={`${S.pos.length} positions`} />
-      <Kpi label="Current value" value={crore(S.value, 1)} sub={S.unmarked ? `${S.unmarked} held at cost (no newer mark)` : 'marked to latest price / round'} />
-      <Kpi label="Gain" value={<span className={S.gain >= 0 ? 'pos' : 'neg'}>{S.gain >= 0 ? '+' : '−'}{crore(Math.abs(S.gain), 1)}</span>} sub={<Delta v={S.cost ? (S.value / S.cost - 1) * 100 : null} />} />
+      <Kpi label="Invested" value={money(S.cost)} sub={`${S.pos.length} position${S.pos.length === 1 ? '' : 's'}`} />
+      <Kpi label="Current value" value={money(S.value)} sub={S.unmarked ? `${S.unmarked} held at cost (no newer mark)` : 'marked to latest price / round'} />
+      <Kpi label="Gain / loss" value={<span className={S.gain >= 0 ? 'pos' : 'neg'}>{S.gain >= 0 ? '+' : ''}{money(S.gain)}</span>} sub={<Delta v={S.cost ? (S.value / S.cost - 1) * 100 : null} />} />
       <Kpi label="Multiple (MOIC)" value={S.moic != null ? `${S.moic.toFixed(2)}x` : '—'} sub="value ÷ invested" />
-      <Kpi label="XIRR" value={<Delta v={S.irr} />} sub="money-weighted, annualised" />
+      <Kpi label="XIRR" value={S.irr != null ? <Delta v={S.irr} /> : '—'} sub={S.irr != null ? 'money-weighted, annualised' : 'shown once the book is ~6 months old (annualising weeks overstates)'} />
     </div>
   )
 }
@@ -45,18 +46,18 @@ export function ReturnsStrip() {
 export function ReturnsChart() {
   const v = useVault()
   const S = summary(v)
-  const data = S.pos.filter(p => p.cost_cr != null).map(p => ({ n: p.r.company.name.replace(/ (Private )?Limited$/i, '').slice(0, 22), Cost: +p.cost_cr!.toFixed(2), Value: +(p.value_cr ?? p.cost_cr!).toFixed(2) }))
+  const data = S.pos.filter(p => p.cost_cr != null).map(p => ({ n: p.r.company.name.replace(/ (Private )?Limited$/i, '').slice(0, 22), Cost: p.cost_cr!, Value: p.value_cr ?? p.cost_cr! }))
     .sort((a, b) => b.Value - a.Value).slice(0, 12)
   if (!data.length) return null
   return (
-    <Card title="Cost vs current value (₹ cr)" solid>
+    <Card title="Cost vs current value" solid>
       <div style={{ height: Math.max(160, data.length * 42) }}>
         <ResponsiveContainer>
           <BarChart data={data} layout="vertical" margin={{ left: 8, right: 24 }} barGap={2}>
             <CartesianGrid stroke="var(--hairline)" horizontal={false} />
-            <XAxis type="number" tick={{ fill: 'var(--ink-3)', fontSize: 11 }} axisLine={false} tickLine={false} />
+            <XAxis type="number" tick={{ fill: 'var(--ink-3)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={x => money(Number(x))} />
             <YAxis type="category" dataKey="n" width={140} tick={{ fill: 'var(--ink-2)', fontSize: 12 }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={{ background: 'var(--glass-solid)', border: '1px solid var(--hairline)', borderRadius: 12 }} formatter={(x, n) => [crore(Number(x), 2), n]} cursor={{ fill: 'var(--hairline)' }} />
+            <Tooltip contentStyle={{ background: 'var(--glass-solid)', border: '1px solid var(--hairline)', borderRadius: 12 }} formatter={(x, n) => [money(Number(x)), n]} cursor={{ fill: 'var(--hairline)' }} />
             <Legend wrapperStyle={{ fontSize: 12 }} />
             <Bar dataKey="Cost" fill="#8a93a6" radius={[0, 4, 4, 0]} maxBarSize={14} />
             <Bar dataKey="Value" fill="#3987e5" radius={[0, 4, 4, 0]} maxBarSize={14} />
@@ -90,9 +91,9 @@ export function HoldingsTable() {
     cols={[
       { key: 'c', label: 'Company', sort: x => x.r.company.name, render: x => <div><b>{x.r.company.name}</b><div className="muted text-xs">{ROUTE[x.h.route] ?? x.h.route} · since {fmtDate(x.h.acquired_on)}</div></div> },
       { key: 's', label: 'Stage', render: x => x.r.custom ? <Pill tone="violet">Private · {x.r.custom.country}</Pill> : <Stage s={x.r.company.lifecycle} /> },
-      { key: 'cost', label: 'Cost', right: true, render: x => crore(x.cost_cr, 2), sort: x => x.cost_cr },
+      { key: 'cost', label: 'Cost', right: true, render: x => money(x.cost_cr), sort: x => x.cost_cr },
       { key: 'mark', label: 'Latest mark', right: true, render: x => x.best ? <span>{x.best.text ?? (x.best.perShare != null ? inr(x.best.perShare, 2) : crore(x.best.value_cr))}<div className="muted text-xs">{x.best.label}</div></span> : <span className="muted">held at cost</span> },
-      { key: 'val', label: 'Value', right: true, render: x => crore(x.value_cr, 2), sort: x => x.value_cr },
+      { key: 'val', label: 'Value', right: true, render: x => money(x.value_cr ?? x.cost_cr), sort: x => x.value_cr },
       { key: 'mult', label: 'Multiple', right: true, render: x => x.best?.multiple != null ? <b className={x.best.multiple >= 1 ? 'pos' : 'neg'}>{x.best.multiple.toFixed(2)}x</b> : '—', sort: x => x.best?.multiple ?? null },
       { key: 'cagr', label: 'CAGR', right: true, render: x => <Delta v={x.best?.cagr} />, sort: x => x.best?.cagr ?? null, hideMobile: true },
       { key: 'ne', label: 'Next event', hideMobile: true, render: x => { const e = nextEvent(x.r); return e ? <span className="text-sm">{v.event_types[e.event_type]?.label ?? e.event_type} · <b>{fmtDate(e.date, false)}</b></span> : <span className="muted">—</span> } },

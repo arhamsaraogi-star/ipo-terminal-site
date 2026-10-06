@@ -304,7 +304,7 @@ function Valuation({ r }: { r: CompanyRecord }) {
   ]
   return (
     <div className="space-y-5">
-      <Card title="Valuation inputs" solid>
+      {V.points.some(p => p.price) && <Card title="Valuation inputs" solid>
         <p className="muted text-sm mb-3">Mechanical calculations from disclosed figures — inputs for your own model, not a view on value.</p>
         <div className="tbl-wrap"><table className="tbl">
           <thead><tr><th>Metric</th>{V.points.map(p => <th key={p.key} className="r">{p.label}</th>)}</tr></thead>
@@ -319,20 +319,21 @@ function Valuation({ r }: { r: CompanyRecord }) {
           <div>Net worth: <FactValue f={V.inputs.nw} /> · Revenue: <FactValue f={V.inputs.rev} /></div>
           <div>Borrowings: <FactValue f={V.inputs.debt} /> · Cash: <FactValue f={V.inputs.cash} /></div>
         </div>
-      </Card>
+      </Card>}
       <WhatIf V={V} />
-      <Card title="Listed peers (from the offer document)" solid>
-        <Table rows={peers} empty="No peer comparison table found in the offer document" cols={[
-          { key: 'n', label: 'Company', render: p => <b className={p.name.toLowerCase().includes(r.company.name.toLowerCase().split(' ')[0]) ? '' : ''}>{p.name}</b> },
-          { key: 'pr', label: 'Price (₹)', right: true, render: p => (p.price != null ? num(p.price, 2) : '—'), sort: p => p.price ?? null },
-          { key: 'mc', label: 'Market cap', right: true, render: p => (p.mcap != null ? num(p.mcap, 0) : '—'), sort: p => p.mcap ?? null },
-          { key: 'pe', label: 'P/E', right: true, render: p => (p.pe != null ? `${p.pe.toFixed(1)}x` : '—'), sort: p => p.pe ?? null },
-          { key: 'pb', label: 'P/B', right: true, render: p => (p.pb != null ? `${p.pb.toFixed(1)}x` : '—') },
-          { key: 'eps', label: 'EPS (₹)', right: true, render: p => (p.eps_basic != null ? num(p.eps_basic, 2) : '—') },
+      <Card title="Listed peers — today vs the offer document" solid>
+        <Table rows={peers} empty="No peer comparison table found in the offer document" initialSort={{ key: 'mc', dir: -1 }} cols={[
+          { key: 'n', label: 'Company', render: p => <div><b>{p.name.replace(/\s*\((consolidated|standalone)[^)]*\)/i, '')}</b>{p.live && <div className="muted text-xs">NSE: {p.live.symbol}</div>}</div> },
+          { key: 'pr', label: 'Price today', right: true, render: p => (p.live ? inr(p.live.price, 2) : <span className="muted">not listed / no match</span>), sort: p => p.live?.price ?? null },
+          { key: 'mc', label: 'Mcap today', right: true, render: p => crore(p.live?.mcap_cr), sort: p => p.live?.mcap_cr ?? null },
+          { key: 'pe', label: 'P/E today', right: true, render: p => (p.live?.pe != null ? <b>{p.live.pe.toFixed(1)}x</b> : '—'), sort: p => p.live?.pe ?? null },
+          { key: 'pb', label: 'P/B today', right: true, render: p => (p.live?.pb != null ? `${p.live.pb.toFixed(1)}x` : '—'), sort: p => p.live?.pb ?? null },
+          { key: 'pe0', label: 'P/E in doc', right: true, hideMobile: true, render: p => (p.pe != null ? `${p.pe.toFixed(1)}x` : '—') },
+          { key: 'eps', label: 'EPS (₹)', right: true, hideMobile: true, render: p => { const e = p.eps_diluted ?? p.eps_basic; return e != null ? num(e, 2) : '—' } },
           { key: 'ronw', label: 'RoNW', right: true, render: p => pct(p.ronw) },
-          { key: 'nav', label: 'NAV (₹)', right: true, render: p => (p.nav != null ? num(p.nav, 2) : '—') },
+          { key: 'nav', label: 'NAV (₹)', right: true, hideMobile: true, render: p => (p.nav != null ? num(p.nav, 2) : '—') },
         ]} />
-        {peers[0]?.source && <p className="muted text-xs mt-2">Source: <SourceLine s={peers[0].source} />. Market cap / income in the document's unit (usually ₹ million or ₹ lakh); peer prices are as of the document date.</p>}
+        {peers[0]?.source && <p className="muted text-xs mt-2">EPS, RoNW and NAV as printed in the offer document (<SourceLine s={peers[0].source} />). Today's price and market cap: NSE close {peers.find(p => p.live)?.live?.date ? `of ${fmtDate(peers.find(p => p.live)!.live!.date)}` : ''}; P/E and P/B today = today's price ÷ the document's EPS / NAV.</p>}
       </Card>
     </div>
   )

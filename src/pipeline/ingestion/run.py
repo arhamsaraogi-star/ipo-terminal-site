@@ -451,6 +451,67 @@ def ingest_news(st: State, nse: N.NSE, max_companies: int) -> None:
     st.log.append(f"NSE announcements: {min(len(listed), max_companies)} listed companies checked, {n_new} new items")
 
 
+# ───────────────────────── BSE-only issues (workaround: secondary aggregator) ─────────────────────────
+def ingest_bse(st: State, client: Client, since: date, budget: int = 60) -> None:
+    from pipeline.ingestion import ipowatch as W
+    try:
+        rows = W.list_rows(client)
+    except Exception as e:  # noqa: BLE001
+        st.failures.append(f"BSE issues (ipowatch): {e}")
+        return
+    n = 0
+    seen = read_json(DATA / "index" / "ipowatch.json", {}) or {}
+    now = datetime.now(IST)
+    for r in rows:
+        if n >= budget or out_of_time(0.5):
+            break
+        prev = seen.get(r["url"]) or {}
+        if prev.get("open") and prev["open"] < since.isoformat():
+            continue                                   # old issue: never re-read
+        if prev.get("at") and (now - datetime.fromisoformat(prev["at"])).total_seconds() < 6 * 3600:
+            continue                                   # read in the last 6 hours
+        try:
+            d = W.issue_page(client, r["url"])
+        except Exception as e:  # noqa: BLE001
+            st.failures.append(f"BSE issue page {r['url'][-40:]}: {str(e)[:80]}")
+            continue
+        n += 1
+        seen[r["url"]] = {"at": now.isoformat(), "open": d.get("open")}
+        if not d.get("open") or d["open"] < since.isoformat():
+            continue
+        sme = "SME" in (r["platform"] + d.get("listing_at", "")).upper()
+        b = st.company(r["name"], segment="SME" if sme else "MAINBOARD", source="BSE-ipowatch")
+        if b.company["segment"] == "UNKNOWN":
+            b.company["segment"] = "SME" if sme else "MAINBOARD"
+        b.company.setdefault("sources", [])
+        if "BSE (via ipowatch.in)" not in b.company["sources"]:
+            b.company["sources"].append("BSE (via ipowatch.in)")
+        o = offering(b)
+        ex = "BSE_SME" if sme else "BSE"
+        if ex not in o["exchanges"]:
+            o["exchanges"].append(ex)
+        s = src("THIRD_PARTY", r["url"], table="ipowatch.in issue page", tier="secondary")
+        oid, F = o["offering_id"], o["facts"]
+        if d.get("band_low") and "price_band_low" not in F:
+            F["price_band_low"] = fact(oid, "price_band_low", d["band_low"], "INR", "Price band — low", s, method="html:ipowatch")
+            F["price_band_high"] = fact(oid, "price_band_high", d["band_high"], "INR", "Price band — high", s, method="html:ipowatch")
+        for k, metric, label in (("issue_cr", "total_issue", "Total issue"), ("fresh_cr", "fresh_issue", "Fresh issue"), ("ofs_cr", "ofs", "Offer for sale")):
+            if d.get(k) and metric not in F:
+                F[metric] = fact(oid, metric, d[k], "INR crore", label, s, method="html:ipowatch")
+        if d.get("face_value") and "face_value" not in F:
+            F["face_value"] = fact(oid, "face_value", d["face_value"], "INR", "Face value", s, method="html:ipowatch")
+        today = TODAY.isoformat()
+        for etype, key in (("ISSUE_OPEN", "open"), ("ISSUE_CLOSE", "close"), ("BASIS_OF_ALLOTMENT", "allotment"), ("LISTING", "listing")):
+            if d.get(key):
+                upsert_event(b, etype, d[key], "actual" if d[key] <= today and etype != "LISTING" else "scheduled", s)
+        for dt, key in (("PROSPECTUS", "prospectus"), ("RHP", "rhp"), ("DRHP", "drhp")):
+            if d.get(key):
+                upsert_doc(b, dt, d[key], d.get("open") if dt != "DRHP" else None, "BSE-ipowatch", title=f"{dt} — {r['name']}")
+        o["detail_fetched_at"] = now_ist()
+    write_json(DATA / "index" / "ipowatch.json", seen)
+    st.log.append(f"BSE-only issues (via ipowatch.in): {len(rows)} listed, {n} issue pages read")
+
+
 # ───────────────────────── exchange equity lists + market data ─────────────────────────
 def enrich_from_equity_lists(st: State, client: Client, since: date) -> None:
     """ISIN / symbol / listing date for companies we already track (matched by symbol or normalised name)."""
@@ -460,6 +521,7 @@ def enrich_from_equity_lists(st: State, client: Client, since: date) -> None:
     except Exception as e:  # noqa: BLE001
         st.failures.append(f"NSE equity lists: {e}")
         return
+    write_json(DATA / "market" / "names.json", {k: v["name"] for k, v in lists.items()})
     by_norm: dict[str, list[str]] = {}
     for sym, r in lists.items():
         if r.get("listed_on") and r["listed_on"] >= since.isoformat():
@@ -501,6 +563,19 @@ def update_market(st: State, client: Client) -> None:
         M.update(client, symbols, listing, budget_ok=lambda: not out_of_time(0.55), log=st.log.append)
     except Exception as e:  # noqa: BLE001
         st.failures.append(f"Market data: {e}")
+    # BSE-only listings (no NSE symbol): prices from the BSE bhavcopy
+    wanted = {}
+    for cid, b in st.bundles.items():
+        ids = b.company["identifiers"]
+        lds = [e["date"] for e in b.events if e["event_type"] == "LISTING" and e["date_kind"] != "derived" and e["date"] <= TODAY.isoformat()]
+        if not ids.get("nse_symbol") and lds:
+            wanted[cid] = {"name": b.company["name"], "isin": ids.get("isin"), "listing": min(lds)}
+    if wanted:
+        try:
+            for cid, code in M.update_bse(client, wanted, budget_ok=lambda: not out_of_time(0.6), log=st.log.append).items():
+                st.bundles[cid].company["identifiers"]["bse_code"] = code
+        except Exception as e:  # noqa: BLE001
+            st.failures.append(f"BSE prices: {e}")
 
 
 # ───────────────────────── lifecycle, changes ─────────────────────────
@@ -636,6 +711,9 @@ def main(argv=None) -> int:
     if "issues" not in skip:
         print('▶ ingest_issues', flush=True)
         ingest_issues(st, nse, since, cal, a.detail_budget)
+    if "bse" not in skip:
+        print('▶ BSE-only issues', flush=True)
+        ingest_bse(st, client, since)
     enrich_from_equity_lists(st, client, since)
     merged = merge_duplicates(st.bundles)
     if merged:

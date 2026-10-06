@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0 — 2026-10-06 · Live peers, BSE coverage, tracked zone
+- Offer-document peer tables brought up to today's NSE close (price, market cap, P/E and P/B on the document's EPS / NAV)
+- BSE-only IPOs (BSE SME + BSE mainboard) via ipowatch.in (secondary source); BSE prices + listing-day open from the BSE bhavcopy
+- Industry charts headline the forecast CAGR (last actual → last projected year)
+- Money shown in ₹ / lakh / crore as it fits; XIRR and CAGR only after ~6 months
+- News: All IPOs = listed ≤ 3 months or filed ≤ 6 months; portfolio and tracked names always show every headline
+- New Tracked page and Calendar in the main menu with an All / Tracked switch
+
 ## 0.5.0 — 2026-10-05 · One big refresh, company summaries, web news
 - Offer documents read in parallel (4 workers); pushes and manual runs do a full sweep, 15-minute runs stay incremental
 - "About the company" summary from the offer document's Our Business → Overview (with page link)

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useVault } from '../App'
-import { PageHead } from '../components/ui'
+import { PageHead, Seg } from '../components/ui'
+import { isMine } from '../lib/derive'
 import { isoToday } from '../lib/format'
 
 const GROUP_COLOR: Record<string, string> = { pipeline: '#7d5cff', issue: '#0a84ff', lockin: '#ff9f0a', post_listing: '#34c77b', corporate: '#ff375f' }
@@ -9,18 +10,21 @@ export default function Calendar() {
   const v = useVault()
   const t = isoToday()
   const [ym, setYm] = useState(t.slice(0, 7))
+  const [scope, setScope] = useState<'all' | 'tracked'>(() => { try { return (localStorage.getItem('cal-scope') as 'all' | 'tracked') || 'all' } catch { return 'all' } })
+  const pick = (x: 'all' | 'tracked') => { setScope(x); try { localStorage.setItem('cal-scope', x) } catch { /* noop */ } }
   const [y, m] = ym.split('-').map(Number)
   const first = new Date(Date.UTC(y, m - 1, 1))
   const days = new Date(Date.UTC(y, m, 0)).getUTCDate()
   const lead = (first.getUTCDay() + 6) % 7 // Monday-first
-  const events = v.companies.flatMap(r => r.events.filter(e => e.date.startsWith(ym)).map(e => ({ r, e })))
+  const events = v.companies.filter(r => scope === 'all' || isMine(v, r.company.company_id))
+    .flatMap(r => r.events.filter(e => e.date.startsWith(ym)).map(e => ({ r, e })))
   const shift = (n: number) => { const d = new Date(Date.UTC(y, m - 1 + n, 1)); setYm(d.toISOString().slice(0, 7)) }
   const label = first.toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' })
 
   return (
     <div>
       <PageHead title="IPO Calendar" sub="Every dated milestone: filings, issue dates, listings, lock-ins, results."
-        action={<div className="flex gap-2 items-center"><button className="btn" onClick={() => shift(-1)}>‹</button>
+        action={<div className="flex gap-2 items-center flex-wrap"><Seg value={scope} onChange={pick} options={[{ v: 'all', label: 'All' }, { v: 'tracked', label: 'Tracked' }]} /><button className="btn" onClick={() => shift(-1)}>‹</button>
           <span className="display font-semibold text-lg w-44 text-center">{label}</span>
           <button className="btn" onClick={() => shift(1)}>›</button><button className="btn" onClick={() => setYm(t.slice(0, 7))}>Today</button></div>} />
       <div className="flex flex-wrap gap-4 mb-4 text-sm ink2">
@@ -41,7 +45,7 @@ export default function Calendar() {
                     <a key={e.event_id} href={`#/company/${r.company.company_id}`} className="block text-[12px] leading-tight rounded-lg px-1.5 py-1 no-underline truncate"
                       style={{ background: 'var(--glass-solid)', color: 'var(--ink)', borderLeft: `3px solid ${GROUP_COLOR[v.event_types[e.event_type]?.group] ?? '#999'}` }}
                       title={`${r.company.name} — ${v.event_types[e.event_type]?.label}`}>
-                      <b>{r.company.name.split(' ')[0]}</b> {v.event_types[e.event_type]?.label}
+                      <b>{r.company.name.replace(/ (Private )?Limited$/i, '').split(' ').slice(0, r.company.name.split(' ')[0].length <= 3 ? 3 : 2).join(' ')}</b> {v.event_types[e.event_type]?.label}
                     </a>
                   ))}
                   {evs.length > 4 && <div className="text-xs muted">+{evs.length - 4} more</div>}

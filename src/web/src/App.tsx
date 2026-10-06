@@ -14,6 +14,7 @@ import Calendar from './pages/Calendar'
 import { Changes, Filings, NewsPage, Review } from './pages/Feeds'
 import { Listed, PrivateTracker } from './pages/Lists'
 import Portfolio from './pages/Portfolio'
+import Tracked from './pages/Tracked'
 import AnchorDesk from './pages/AnchorDesk'
 import { NewPrivatePage } from './pages/PrivateCo'
 import { privateRecord, loadPf, savePf, takeLegacy, withTombstones, normalisePf, type Pf } from './lib/portfolio'
@@ -299,8 +300,10 @@ const NAV: { path: string; label: string; icon: string }[] = [
   { path: '/anchor', label: 'Anchor Desk', icon: '⚓' },
   { path: '/ipos', label: 'IPOs', icon: '▤' },
   { path: '/listed', label: 'Listed', icon: '◆' },
-  { path: '/lockins', label: 'Lock-ins', icon: '⌛' },
+  { path: '/calendar', label: 'Calendar', icon: '▦' },
+  { path: '/tracked', label: 'Tracked', icon: '◎' },
   { path: '/portfolio', label: 'Portfolio', icon: '★' },
+  { path: '/lockins', label: 'Lock-ins', icon: '⌛' },
   { path: '/activity', label: 'Activity', icon: '≡' },
 ]
 
@@ -320,6 +323,7 @@ function Shell({ onLock, updated }: { onLock: () => void; updated: string | null
   const [menu, setMenu] = useState(false)
   const counts: Record<string, number> = {
     '/portfolio': v.portfolio.holdings.length,
+    '/tracked': v.portfolio.tracking.filter(t => t.status !== 'PASSED').length,
     '/lockins': allLockins(v).filter(x => x.d >= 0 && x.d <= 30).length,
     '/ipos': upcomingEvents(v, 30, ['ISSUE_OPEN']).length,
     '/anchor': v.companies.filter(r => r.events.some(e => ['DRHP_FILED', 'UDRHP_FILED'].includes(e.event_type) && daysUntil(e.date) >= -7 && daysUntil(e.date) <= 0)).length,
@@ -335,7 +339,6 @@ function Shell({ onLock, updated }: { onLock: () => void; updated: string | null
       case '/ipos': return <Tabbed base="/ipos" tab={arg} tabs={[
         { k: 'upcoming', label: 'Upcoming & open', el: <Pipeline mode="upcoming" /> },
         { k: 'pipeline', label: 'Full pipeline', el: <Pipeline mode="all" /> },
-        { k: 'calendar', label: 'Calendar', el: <Calendar /> },
         { k: 'private', label: 'Private → IPO', el: <PrivateTracker /> }]} />
       case '/activity': return <Tabbed base="/activity" tab={arg} tabs={[
         { k: 'changes', label: 'What changed', el: <Changes /> },
@@ -347,6 +350,7 @@ function Shell({ onLock, updated }: { onLock: () => void; updated: string | null
       case '/listed': return <Listed />
       case '/private': return <PrivateTracker />
       case '/lockins': return <Lockins />
+      case '/tracked': return <Tracked />
       case '/calendar': return <Calendar />
       case '/filings': return <Filings />
       case '/changes': return <Changes />
@@ -396,7 +400,7 @@ function Shell({ onLock, updated }: { onLock: () => void; updated: string | null
         )}
         <main key={route} className="page">{page}</main>
         <nav className="bottom-nav glass glass-strong" aria-label="Primary">
-          {[['/', '◉', 'Home'], ['/anchor', '⚓', 'Anchor'], ['/ipos', '▤', 'IPOs'], ['/listed', '◆', 'Listed'], ['/portfolio', '★', 'Portfolio']].map(([p, i, l]) => (
+          {[['/', '◉', 'Home'], ['/anchor', '⚓', 'Anchor'], ['/ipos', '▤', 'IPOs'], ['/tracked', '◎', 'Tracked'], ['/portfolio', '★', 'Portfolio']].map(([p, i, l]) => (
             <a key={p} href={`#${p}`} aria-current={active === p ? 'page' : undefined}><span className="ico">{i}</span>{l}</a>
           ))}
         </nav>

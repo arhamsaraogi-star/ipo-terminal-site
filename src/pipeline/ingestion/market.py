@@ -133,6 +133,8 @@ def update(client: Client, symbols: dict[str, str], listing_dates: dict[str, str
                     q[sym].update({k: extra.get(k) for k in ("prev_close", "open", "high", "low", "volume")})
                     quotes[sym] = q[sym]
             stats["quote_date"] = d.isoformat()
+            # whole market (close, mcap, name) — used to bring offer-document peer tables up to date
+            write_json(MKT / "universe.json", {"date": d.isoformat(), "rows": {k: [v["close"], v.get("mcap_cr"), v.get("name")] for k, v in q.items()}})
             break
 
     # 2) listing-day OHLC for symbols not yet captured
@@ -172,3 +174,72 @@ def update(client: Client, symbols: dict[str, str], listing_dates: dict[str, str
     write_json(MKT / "days.json", sorted(done))
     log(f"Market data: quotes as of {stats['quote_date']}, {stats['listing_days']} listing days, {stats['history_days_added']} history days")
     return stats
+
+
+# ───────────────────────── BSE (static bhavcopy CSV — reachable, unlike BSE's APIs) ─────────────────────────
+BSE_BHAV = "https://www.bseindia.com/download/BhavCopy/Equity/BhavCopy_BSE_CM_0_0_0_{d:%Y%m%d}_F_0000.CSV"
+
+
+def fetch_bse_bhav(client: Client, d: date) -> dict[str, dict] | None:
+    try:
+        r = client.request("GET", BSE_BHAV.format(d=d))
+    except SourceError:
+        return None
+    text = r.content.decode("latin-1")
+    if not text.startswith("TradDt"):
+        return None
+    out: dict[str, dict] = {}
+    for row in csv.DictReader(io.StringIO(text)):
+        if row.get("FinInstrmTp") != "STK":
+            continue
+        code = (row.get("FinInstrmId") or "").strip()
+        out[code] = {"date": d.isoformat(), "code": code, "isin": (row.get("ISIN") or "").strip(), "symbol": (row.get("TckrSymb") or "").strip(),
+                     "name": (row.get("FinInstrmNm") or "").strip(), "series": (row.get("SctySrs") or "").strip(),
+                     "open": _num(row.get("OpnPric")), "high": _num(row.get("HghPric")), "low": _num(row.get("LwPric")),
+                     "close": _num(row.get("ClsPric")), "prev_close": _num(row.get("PrvsClsgPric")), "volume": _num(row.get("TtlTradgVol"))}
+    return out or None
+
+
+def update_bse(client: Client, wanted: dict[str, dict], *, budget_ok=lambda: True, log=print) -> dict[str, str]:
+    """wanted: {company_id: {name, isin, listing}} for BSE-only listings. Matches by ISIN, else by name, on the latest
+    bhavcopy; stores quotes under 'BSE:<code>' and the listing-day OHLC. Returns {company_id: bse_code}."""
+    from pipeline.normalization.entities import norm
+    MKT.mkdir(parents=True, exist_ok=True)
+    quotes: dict = read_json(MKT / "quotes.json", {})
+    listing: dict = read_json(MKT / "listing.json", {})
+    latest = None
+    for back in range(0, 8):
+        d = date.today() - timedelta(days=back)
+        if d.weekday() < 5 and (latest := fetch_bse_bhav(client, d)):
+            break
+    if not latest:
+        return {}
+    by_isin = {v["isin"]: k for k, v in latest.items() if v["isin"]}
+    by_name = {norm(v["name"].rstrip(".")): k for k, v in latest.items()}
+    found: dict[str, str] = {}
+    for cid, w in wanted.items():
+        code = by_isin.get(w.get("isin") or "") or by_name.get(norm(w["name"]))
+        if not code:
+            n = norm(w["name"])[:22]                     # BSE truncates names to ~30 chars
+            code = next((k for nm, k in by_name.items() if n and nm.startswith(n)), None)
+        if not code:
+            continue
+        found[cid] = code
+        q = latest[code]
+        quotes[f"BSE:{code}"] = {"date": q["date"], "close": q["close"], "prev_close": q["prev_close"], "open": q["open"], "high": q["high"],
+                                 "low": q["low"], "volume": q["volume"], "shares": None, "mcap_cr": None, "series": q["series"], "exchange": "BSE"}
+        ld = w.get("listing")
+        key = f"BSE:{code}"
+        if ld and key not in listing and budget_ok():
+            day = fetch_bse_bhav(client, date.fromisoformat(ld)) if ld != q["date"] else latest
+            if day and code in day:
+                x = day[code]
+                listing[key] = {"date": ld, "open": x["open"], "high": x["high"], "low": x["low"], "close": x["close"], "prev_close": x["prev_close"]}
+        h = read_json(MKT / "history" / f"{key.replace(':', '_')}.json", [])
+        if not h or h[-1][0] < q["date"]:
+            h.append([q["date"], q["close"]])
+            write_json(MKT / "history" / f"{key.replace(':', '_')}.json", h[-400:])
+    write_json(MKT / "quotes.json", quotes)
+    write_json(MKT / "listing.json", listing)
+    log(f"BSE prices: {len(found)} of {len(wanted)} BSE-only listings matched")
+    return found

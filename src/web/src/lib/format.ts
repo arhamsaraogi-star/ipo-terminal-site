@@ -21,6 +21,15 @@ export const fmtDateTime = (iso?: string | null) => iso
 const nf = (d = 0) => new Intl.NumberFormat('en-IN', { maximumFractionDigits: d, minimumFractionDigits: d })
 export const num = (v: number, d = 0) => nf(d).format(v)
 export const crore = (v?: number | null, d = 0) => (v == null ? '—' : `₹${nf(d).format(v)} cr`)
+/** Amount given in ₹ crore, shown in the unit that fits: ₹ thousand / lakh / crore. */
+export const money = (cr?: number | null) => {
+  if (cr == null || !isFinite(cr)) return '—'
+  const a = Math.abs(cr), sign = cr < 0 ? '−' : ''
+  if (a === 0) return '₹0'
+  if (a < 0.01) return `${sign}₹${nf(0).format(a * 1e7)}`
+  if (a < 1) return `${sign}₹${nf(a * 100 >= 10 ? 1 : 2).format(a * 100)} L`
+  return `${sign}₹${nf(a >= 100 ? 0 : a >= 10 ? 1 : 2).format(a)} cr`
+}
 export const inr = (v?: number | null, d = 0) => (v == null ? '—' : `₹${nf(d).format(v)}`)
 export const pct = (v?: number | null, d = 1) => (v == null || !isFinite(v) ? '—' : `${nf(d).format(v)}%`)
 export const shares = (v?: number | null) => {

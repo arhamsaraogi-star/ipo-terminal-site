@@ -1,6 +1,6 @@
 import { useVault, go } from '../App'
 import { Card, Delta, Kpi, Pill, Stage, Table } from '../components/ui'
-import { allLockins, cmp, eventDate, ipo, issuePrice, issueSize, listedOn, listingGainPct, priceBand, returnVsIssuePct, upcomingEvents } from '../lib/derive'
+import { allLockins, cmp, eventDate, ipo, issuePrice, issueSize, listedOn, listingGainPct, priceBand, returnVsIssuePct, upcomingEvents, inScope, isHeld } from '../lib/derive'
 import { crore, daysUntil, fmtDate, fmtDateTime, inr, pct, urgency } from '../lib/format'
 import { HoldingsTable, ReturnsStrip, TrackingTable } from './Portfolio'
 import { brlms, dealSize, filedOn } from './AnchorDesk'
@@ -116,7 +116,7 @@ function OpenNow() {
 
 function IpoNews() {
   const v = useVault()
-  const items = v.companies.filter(r => !r.custom).flatMap(r => r.news.map(n => ({ n, r })))
+  const items = v.companies.filter(r => inScope(r) || isHeld(v, r.company.company_id)).flatMap(r => r.news.map(n => ({ n, r })))
     .sort((a, b) => b.n.published_at.localeCompare(a.n.published_at)).slice(0, 9)
   return (
     <Card title="Latest IPO news" action={<a className="btn" href="#/activity/news">All →</a>} solid>

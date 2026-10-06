@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useVault, go } from '../App'
 import { Card, PageHead, Pill, Seg, SourceLine, Stage, Table } from '../components/ui'
-import { byId, isHeld } from '../lib/derive'
+import { byId, inScope, isMine } from '../lib/derive'
 import { daysUntil, fmtDate, fmtDateTime } from '../lib/format'
 
 export function Changes() {
@@ -46,13 +46,15 @@ export function Filings() {
 
 export function NewsPage() {
   const v = useVault()
-  const [scope, setScope] = useState<'holdings' | 'watch' | 'all'>('holdings')
-  const rows = v.companies.filter(r => scope === 'all' || (scope === 'holdings' ? isHeld(v, r.company.company_id) : v.portfolio.watchlist.includes(r.company.company_id)))
+  const [scope, setScope] = useState<'all' | 'tracked'>('all')
+  // All = IPO-relevant companies (listed ≤ 3 months, filed ≤ 6 months, issue in progress) + everything you hold or track.
+  // Tracked = portfolio + tracking list, with no time limit.
+  const rows = v.companies.filter(r => scope === 'tracked' ? isMine(v, r.company.company_id) : inScope(r) || isMine(v, r.company.company_id))
     .flatMap(r => r.news.map(n => ({ r, n }))).sort((a, b) => b.n.published_at.localeCompare(a.n.published_at))
   return (
     <div>
-      <PageHead title="News" sub="Exchange announcements (official) and media coverage, de-duplicated." />
-      <Card solid action={<Seg value={scope} onChange={setScope} options={[{ v: 'holdings', label: 'My holdings' }, { v: 'watch', label: 'Watchlist' }, { v: 'all', label: 'All companies' }]} />} title={`${rows.length} items`}>
+      <PageHead title="News" sub="All IPOs = listed in the last 3 months or filed in the last 6 months. Tracked = your portfolio + tracking list, all news, no time limit." />
+      <Card solid action={<Seg value={scope} onChange={setScope} options={[{ v: 'all', label: 'All IPOs' }, { v: 'tracked', label: 'Tracked' }]} />} title={`${rows.length} items`}>
         <Table rows={rows} cols={[
           { key: 't', label: 'Time', render: x => fmtDateTime(x.n.published_at), sort: x => x.n.published_at },
           { key: 'c', label: 'Company', render: x => <a href={`#/company/${x.r.company.company_id}`}>{x.r.company.name}</a> },

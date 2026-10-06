@@ -7,6 +7,8 @@ Exit code 1 if any validation error: nothing is written, nothing deploys.
 """
 from __future__ import annotations
 
+import re
+
 import argparse
 import os
 import sys
@@ -25,18 +27,42 @@ MARKET_URL = "https://nsearchives.nseindia.com/archives/equities/bhavcopy/pr/"
 
 
 def market_block(b: CompanyBundle, data: Path) -> dict | None:
-    sym = b.company.get("identifiers", {}).get("nse_symbol")
+    ids = b.company.get("identifiers", {})
+    sym = ids.get("nse_symbol") or (f"BSE:{ids['bse_code']}" if ids.get("bse_code") else None)
     if not sym:
         return None
     q = _MKT["quotes"].get(sym)
     lst = _MKT["listing"].get(sym)
-    hist = read_json(data / "market" / "history" / f"{sym}.json", [])
+    hist = read_json(data / "market" / "history" / f"{sym.replace(':', '_')}.json", [])
     if not (q or lst or hist):
         return None
     if len(hist) > 260:  # keep the chart light: weekly points beyond the last 120 sessions
         hist = hist[:-120][::5] + hist[-120:]
     return {"symbol": sym, "quote": q, "listing": lst, "history": hist,
-            "source": "NSE end-of-day archives (bhavcopy / market-cap file); delayed"}
+            "source": ("BSE end-of-day bhavcopy; delayed" if sym.startswith("BSE:") else "NSE end-of-day archives (bhavcopy / market-cap file); delayed")}
+
+
+def _pnorm(s: str) -> str:
+    import re as _re
+    from pipeline.normalization.entities import norm
+    return norm(_re.sub(r"\(.*?\)|\*|consolidated|standalone|fy ?\d+", " ", s, flags=_re.I))
+
+
+def peer_symbol(name: str) -> str | None:
+    """Offer-document peer name → NSE symbol (exact normalised name, then close fuzzy match)."""
+    import difflib
+    if not _MKT.get("names") or re.search(r"\bour company\b|^the company", name, re.I):
+        return None
+    idx = _MKT.get("_name_idx")
+    if idx is None:
+        idx = _MKT["_name_idx"] = {_pnorm(v): k for k, v in _MKT["names"].items()}
+    n = _pnorm(name)
+    if not n:
+        return None
+    if n in idx:
+        return idx[n]
+    m = difflib.get_close_matches(n, [k for k in idx if k[:3] == n[:3]], n=1, cutoff=0.88)
+    return idx[m[0]] if m else None
 
 
 def derive(b: CompanyBundle, data: Path = DATA) -> CompanyBundle:
@@ -52,6 +78,20 @@ def derive(b: CompanyBundle, data: Path = DATA) -> CompanyBundle:
             "table": "NSE market capitalisation file", "section": None, "url": MARKET_URL, "sha256": None, "tier": "primary"},
             "extraction": {"method": "exchange:mcap_file", "extracted_at": now_ist(), "extractor_version": None, "confidence": "high"},
             "status": "ok", "note": None, "supersedes": None}
+    # listed peers: bring the offer document's peer table up to today's NSE close (P/E, P/B recomputed on the doc's EPS / NAV)
+    uni = _MKT.get("universe") or {}
+    if uni and b.facts and b.facts.get("peers"):
+        for p in b.facts["peers"]:
+            sym = peer_symbol(p.get("name", ""))
+            if not sym or sym not in uni["rows"]:
+                p.pop("live", None)
+                continue
+            close, mcap, _ = uni["rows"][sym]
+            eps = p.get("eps_diluted") or p.get("eps_basic") or p.get("eps")
+            nav = p.get("nav")
+            p["live"] = {"symbol": sym, "date": uni["date"], "price": close, "mcap_cr": mcap,
+                         "pe": round(close / eps, 1) if eps and eps > 0 else None,
+                         "pb": round(close / nav, 2) if nav and nav > 0 else None}
     b.lockins = lk.compute(b)
     return b
 
@@ -85,6 +125,9 @@ def build_payload(data: Path = DATA, write_derived: bool = True) -> tuple[dict, 
     companies = []
     _MKT["quotes"] = read_json(data / "market" / "quotes.json", {})
     _MKT["listing"] = read_json(data / "market" / "listing.json", {})
+    _MKT["universe"] = read_json(data / "market" / "universe.json", {})
+    _MKT["names"] = read_json(data / "market" / "names.json", {})
+    _MKT.pop("_name_idx", None)
     for d in company_dirs(data):
         b = derive(load_company(d), data)
         r = validate_bundle(b)

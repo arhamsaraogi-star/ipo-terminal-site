@@ -64,7 +64,8 @@ export interface PrivateCo {
   website?: string | null; note?: string | null; rounds: Round[]; created_on: string
 }
 export interface Peer { name: string; face_value?: number | null; price?: number | null; total_income?: number | null; mcap?: number | null
-  pb?: number | null; pe?: number | null; eps_basic?: number | null; ronw?: number | null; nav?: number | null; source?: Source }
+  pb?: number | null; pe?: number | null; eps_basic?: number | null; eps_diluted?: number | null; ronw?: number | null; nav?: number | null; source?: Source
+  live?: { symbol: string; date: string; price: number; mcap_cr?: number | null; pe?: number | null; pb?: number | null } }
 export interface IndustryClaim { text: string; page: number; cagr_pct?: number | null; amounts?: { value: number; unit: string }[]; years?: string[]; source?: Source }
 export interface IndustrySeries { title: string; unit?: string | null; page: number; kind: 'chart' | 'table' | 'text'; periods: string[]; projected?: boolean[]; rows: { name: string; values: (number | null)[] }[]; note?: string | null; macro?: boolean; source?: Source }
 export interface WebNews { title: string; url: string; publisher?: string | null; published_at?: string | null }

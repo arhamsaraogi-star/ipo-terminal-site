@@ -30,6 +30,17 @@ export function seriesCagr(periods: string[], values: (number | null)[], project
   return { pct: (Math.pow(b.v! / a.v!, 1 / n) - 1) * 100, a, b }
 }
 
+/** Forecast CAGR: from the last actual (non-projected) value to the last projected value. Null if nothing is projected. */
+export function forecastCagr(periods: string[], values: (number | null)[], projected: boolean[]) {
+  const pts = periods.map((p, i) => ({ p, y: yearOf(p), v: values[i], proj: projected[i] })).filter(x => x.v != null && x.y != null && x.v > 0)
+  const act = pts.filter(x => !x.proj), fut = pts.filter(x => x.proj)
+  if (!act.length || !fut.length) return null
+  const a = act[act.length - 1], b = fut[fut.length - 1]
+  const n = b.y! - a.y!
+  if (n <= 0) return null
+  return { pct: (Math.pow(b.v! / a.v!, 1 / n) - 1) * 100, a, b }
+}
+
 const fmt = (v: number) => (Math.abs(v) >= 1000 ? num(v, 0) : Math.abs(v) >= 10 ? num(v, 1) : num(v, 2))
 
 function ChartCard({ s, pdf }: { s: IndustrySeries; pdf?: string }) {
@@ -38,8 +49,8 @@ function ChartCard({ s, pdf }: { s: IndustrySeries; pdf?: string }) {
   const rows = c.rows.filter(r => !/^total$/i.test(r.name.trim())).slice(0, 6)
   const total = c.rows.find(r => /^total$/i.test(r.name.trim()))
   const main = single ? c.rows[0] : total ?? rows[0]
-  const g = main ? seriesCagr(c.periods, main.values, c.projected) : null
-  const gAct = main && c.projected.some(Boolean) ? seriesCagr(c.periods, main.values, c.projected, true) : null
+  const fc = main ? forecastCagr(c.periods, main.values, c.projected) : null
+  const hist = main ? seriesCagr(c.periods, main.values, c.projected, true) : null
   const data = c.periods.map((p, i) => {
     const o: Record<string, number | string | boolean | null> = { p, proj: c.projected[i] }
     for (const r of single ? c.rows : rows) o[r.name] = r.values[i]
@@ -54,8 +65,9 @@ function ChartCard({ s, pdf }: { s: IndustrySeries; pdf?: string }) {
           <div className="font-semibold leading-snug text-[15px]">{s.title}</div>
           <div className="muted text-xs mt-0.5">{[s.unit, `${c.periods[0]}–${c.periods[c.periods.length - 1]}`, !single && rows.length ? `${rows.length} series` : null].filter(Boolean).join(' · ')}</div>
         </div>
-        {g && <div className="text-right shrink-0"><div className={`display text-[20px] font-semibold ${g.pct >= 0 ? 'pos' : 'neg'}`}>{g.pct >= 0 ? '+' : ''}{g.pct.toFixed(1)}%</div>
-          <div className="muted text-[11px]">CAGR{gAct ? ` · actual ${gAct.pct >= 0 ? '+' : ''}${gAct.pct.toFixed(1)}%` : ''}</div></div>}
+        {fc ? <div className="text-right shrink-0"><div className={`display text-[20px] font-semibold ${fc.pct >= 0 ? 'pos' : 'neg'}`}>{fc.pct >= 0 ? '+' : ''}{fc.pct.toFixed(1)}%</div>
+          <div className="muted text-[11px]">forecast CAGR {fc.a.p}–{fc.b.p}</div></div>
+          : hist && <div className="text-right shrink-0 muted text-[11px] leading-tight">historical<br />{hist.pct >= 0 ? '+' : ''}{hist.pct.toFixed(1)}% a year</div>}
       </div>
       <div className="h-[190px] mt-2">
         <ResponsiveContainer>
@@ -96,11 +108,13 @@ export function IndustryCharts({ series }: { series: IndustrySeries[] }) {
   const macro = series.filter(s => s.macro)
   const headline = sector.map(s => {
     const c = chrono(s); const r = c.rows.find(x => /^total$/i.test(x.name.trim())) ?? c.rows[0]
-    const g = r ? seriesCagr(c.periods, r.values, c.projected) : null
+    const g = r ? forecastCagr(c.periods, r.values, c.projected) : null
     const score = (c.projected.some(Boolean) ? 3 : 0) + (/₹|rs|us\$|usd|bn|mn|cr|lakh|tonne|tpa|units|sq/i.test(`${s.unit ?? ''} ${s.title}`) ? 2 : 0)
       + (s.kind !== 'text' ? 1 : 0) + Math.min(c.periods.length, 8) * 0.1 - (/share|%|growth|change|y-o-y|yoy/i.test(`${s.unit ?? ''} ${s.title}`) ? 2 : 0)
-    return g ? { s, g, score } : null
-  }).filter(Boolean).sort((a, b) => b!.score - a!.score).slice(0, 4) as { s: IndustrySeries; g: NonNullable<ReturnType<typeof seriesCagr>> }[]
+    return g && g.b.y! - g.a.y! >= 2 ? { s, g, score } : null
+  }).filter(Boolean).sort((a, b) => b!.score - a!.score).slice(0, 4) as { s: IndustrySeries; g: NonNullable<ReturnType<typeof forecastCagr>> }[]
+  const hasFc = (s: IndustrySeries) => { const c = chrono(s); return c.rows.some(r => forecastCagr(c.periods, r.values, c.projected)) }
+  const ordered = [...sector.filter(hasFc), ...sector.filter(s => !hasFc(s))]
   return (
     <div className="space-y-5">
       {!!headline.length && (
@@ -109,13 +123,13 @@ export function IndustryCharts({ series }: { series: IndustrySeries[] }) {
             <div key={i} className="glass p-4">
               <div className="eyebrow line-clamp-2">{s.title}</div>
               <div className={`display text-[30px] font-semibold mt-1 ${g.pct >= 0 ? 'pos' : 'neg'}`}>{g.pct >= 0 ? '+' : ''}{g.pct.toFixed(1)}%</div>
-              <div className="muted text-xs">CAGR · {fmt(g.a.v!)} → {fmt(g.b.v!)}{s.unit ? ` ${s.unit}` : ''}</div>
+              <div className="muted text-xs">forecast CAGR {g.a.p}–{g.b.p} · {fmt(g.a.v!)} → {fmt(g.b.v!)}{s.unit ? ` ${s.unit}` : ''}</div>
             </div>
           ))}
         </div>
       )}
       <div className="grid md:grid-cols-2 gap-4">
-        {sector.map((s, i) => <ChartCard key={i} s={s} />)}
+        {ordered.map((s, i) => <ChartCard key={i} s={s} />)}
       </div>
       {!!macro.length && (
         <div>
@@ -123,7 +137,7 @@ export function IndustryCharts({ series }: { series: IndustrySeries[] }) {
           {showMacro && <div className="grid md:grid-cols-2 gap-4 mt-4">{macro.map((s, i) => <ChartCard key={i} s={s} />)}</div>}
         </div>
       )}
-      <p className="muted text-xs">Rebuilt from the data labels, tables and statements printed in the offer document's Industry Overview (commissioned report). CAGRs are calculated here from the first and last printed values.</p>
+      <p className="muted text-xs">Rebuilt from the data labels, tables and statements printed in the offer document's Industry Overview (commissioned report). Forecast CAGR = from the last actual year to the last projected year (E / P / F), calculated here from the printed values; charts with forecasts come first.</p>
     </div>
   )
 }

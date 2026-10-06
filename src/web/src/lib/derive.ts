@@ -143,7 +143,7 @@ export function holdingMarks(r: CompanyRecord, h: import('./types').Holding): { 
     if (perShare != null && h.avg_cost) multiple = perShare / h.avg_cost
     else if (valuation_cr != null && entryVal) multiple = valuation_cr / entryVal
     const y = years(date)
-    marks.push({ label, date, value_cr: valuation_cr, perShare, multiple, cagr: multiple != null && y ? (Math.pow(multiple, 1 / y) - 1) * 100 : null })
+    marks.push({ label, date, value_cr: valuation_cr, perShare, multiple, cagr: multiple != null && y && y >= 0.5 ? (Math.pow(multiple, 1 / y) - 1) * 100 : null })
   }
   if (h.latest_round_cr) add('Latest private round', h.latest_round_on ?? null, h.latest_round_cr, null)
   const ip = issuePrice(r)
@@ -168,10 +168,22 @@ function customMarks(p: import('./types').PrivateCo, h: import('./types').Holdin
     else if (rd.post_money && h.entry_valuation_cr) multiple = rd.post_money / h.entry_valuation_cr
     const y = years(rd.date)
     marks.push({ label: rd.label || 'Round', date: rd.date, value_cr: toCr(rd.post_money, cur, p.fx_inr), perShare: rd.price_per_share ?? null, multiple,
-      cagr: multiple != null && y && y >= 0.25 ? (Math.pow(multiple, 1 / y) - 1) * 100 : null, text: rd.post_money != null ? `${fmtCur(rd.post_money, cur)} val.` : undefined })
+      cagr: multiple != null && y && y >= 0.5 ? (Math.pow(multiple, 1 / y) - 1) * 100 : null, text: rd.post_money != null ? `${fmtCur(rd.post_money, cur)} val.` : undefined })
   }
   return { cost_cr, marks }
 }
+
+/** News/calendar relevance window: listed in the last 3 months, offer document filed in the last 6 months, or an issue in progress. */
+export function inScope(r: CompanyRecord) {
+  if (r.custom) return false
+  const d = listedOn(r)
+  if (d) return daysUntil(d) >= -92
+  if (['ISSUE_OPEN', 'ISSUE_ANNOUNCED', 'ISSUE_CLOSED', 'RHP_FILED'].includes(r.company.lifecycle)) return true
+  const filed = r.events.filter(e => ['DRHP_FILED', 'UDRHP_FILED', 'RHP_FILED', 'PROSPECTUS_FILED'].includes(e.event_type)).map(e => e.date).sort().pop()
+  return !!filed && daysUntil(filed) >= -183
+}
+/** In the portfolio or on the tracking list (Passed excluded). */
+export const isMine = (v: Vault, id: string) => v.portfolio.holdings.some(h => h.company_id === id) || v.portfolio.tracking.some(t => t.company_id === id && t.status !== 'PASSED')
 
 export const isHeld = (v: Vault, id: string) => v.portfolio.holdings.some(h => h.company_id === id)
 export const isWatched = (v: Vault, id: string) => v.portfolio.watchlist.includes(id)
