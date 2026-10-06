@@ -149,3 +149,48 @@ def test_company_found_trading_is_listed_even_without_listing_event():
     assert R.lifecycle(b) == "LISTED"
     b.company.pop("exchange_listed")
     assert R.lifecycle(b) == "RHP_FILED"
+
+
+def test_old_issue_matched_on_nse_list_becomes_listed_with_its_real_date(tmp_path, monkeypatch):
+    from datetime import timedelta
+    from pipeline.ingestion import market as M, run as R
+    monkeypatch.setattr(R, "company_dirs", lambda *a, **k: iter(()))
+    st = R.State(True)
+    b = st.company("Yash Highvoltage Limited", segment="SME", source="BSE-SME")
+    R.upsert_event(b, "RHP_FILED", "2024-12-10", "actual", None)
+    assert R.lifecycle(b) == "RHP_FILED"
+    monkeypatch.setattr(M, "fetch_equity_lists", lambda c: {"YASHHV": {"name": "Yash Highvoltage Limited", "isin": "INE0YH000000", "listed_on": "2024-12-27", "segment": "SME"}})
+    R.enrich_from_equity_lists(st, None, R.TODAY - timedelta(days=183))     # the window is 6 months; the listing is from 2024
+    b.company["lifecycle"] = R.lifecycle(b)
+    assert b.company["lifecycle"] == "LISTED"
+    assert b.company["identifiers"]["nse_symbol"] == "YASHHV"
+    assert any(e["event_type"] == "LISTING" and e["date"] == "2024-12-27" for e in b.events)
+
+
+def test_bare_drhp_never_matches_an_old_listing_by_name(monkeypatch):
+    from datetime import timedelta
+    from pipeline.ingestion import market as M, run as R
+    monkeypatch.setattr(R, "company_dirs", lambda *a, **k: iter(()))
+    st = R.State(True)
+    b = st.company("Acme Industries Limited", segment="MAINBOARD", source="SEBI")
+    R.upsert_event(b, "DRHP_FILED", "2026-10-01", "actual", None)
+    monkeypatch.setattr(M, "fetch_equity_lists", lambda c: {"ACME": {"name": "Acme Industries Limited", "isin": None, "listed_on": "2010-05-05", "segment": "MAINBOARD"}})
+    R.enrich_from_equity_lists(st, None, R.TODAY - timedelta(days=183))
+    assert not b.company["identifiers"].get("nse_symbol") and R.lifecycle(b) == "DRHP_FILED"
+
+
+def test_bse_only_issue_found_on_bhavcopy_is_marked_listed(monkeypatch):
+    from pipeline.ingestion import market as M, run as R
+    monkeypatch.setattr(R, "company_dirs", lambda *a, **k: iter(()))
+    st = R.State(True)
+    b = st.company("Yash Highvoltage Limited", segment="SME", source="BSE-SME")
+    R.upsert_event(b, "RHP_FILED", "2024-12-10", "actual", None)
+    seen = {}
+    monkeypatch.setattr(M, "update", lambda *a, **k: {})
+    def fake_bse(client, wanted, **k):
+        seen.update(wanted)
+        return {cid: "543999" for cid in wanted}
+    monkeypatch.setattr(M, "update_bse", fake_bse)
+    R.update_market(st, None)
+    assert b.company["company_id"] in seen
+    assert b.company["identifiers"]["bse_code"] == "543999" and b.company["exchange_listed"] == "BSE" and b.company["lifecycle"] == "LISTED"

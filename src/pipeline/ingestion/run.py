@@ -574,8 +574,7 @@ def enrich_from_equity_lists(st: State, client: Client, since: date) -> None:
     write_json(DATA / "market" / "listed.json", {k: [v["name"], v.get("isin"), v["segment"], v.get("listed_on")] for k, v in lists.items()})
     by_norm: dict[str, list[str]] = {}
     for sym, r in lists.items():
-        if r.get("listed_on") and r["listed_on"] >= since.isoformat():
-            by_norm.setdefault(norm(r["name"]), []).append(sym)
+        by_norm.setdefault(norm(r["name"]), []).append(sym)        # all listings: an old issue must still find its symbol
     n = 0
     for b in st.bundles.values():
         ids = b.company["identifiers"]
@@ -585,6 +584,9 @@ def enrich_from_equity_lists(st: State, client: Client, since: date) -> None:
             cands = by_norm.get(norm(b.company["name"]), [])
             if len(cands) == 1:
                 sym, rec = cands[0], lists[cands[0]]
+                old_listing = (rec.get("listed_on") or "9") < since.isoformat()
+                if old_listing and not any(e["event_type"] in ("RHP_FILED", "PROSPECTUS_FILED", "ISSUE_OPEN") for e in b.events):
+                    sym, rec = None, None        # a bare DRHP never matches an old listing by name alone
         if not rec:
             continue
         if not ids.get("nse_symbol"):
