@@ -86,11 +86,15 @@ def test_old_approved_drhp_stays_in_pipeline_with_sebi_approval_event(tmp_path, 
     names = {b.company["name"] for b in st.bundles.values()}
     assert "Tmc Transformers (India) Limited" in names or any("tmc" in n.lower() for n in names)
     b = next(b for b in st.bundles.values() if "tmc" in b.company["name"].lower())
-    assert any(e["event_type"] == "SEBI_OBSERVATION" and e["date"] == R.TODAY.isoformat() for e in b.events)
+    # already Approved when first seen: approved stage, but no invented "approved today" event
+    assert not any(e["event_type"] == "SEBI_OBSERVATION" for e in b.events)
     assert R.lifecycle(b) == "SEBI_OBSERVED"
-    again = len([e for e in b.events if e["event_type"] == "SEBI_OBSERVATION"])
+    # a status change we actually observe (Under Process → Approved) is dated the day we saw it, once
+    b.company["drhp_status"] = "Under Process"
     R.ingest_offerdocs(st, FakeNSE(), R.TODAY - timedelta(days=183), R.TODAY - timedelta(days=900))
-    assert len([e for e in b.events if e["event_type"] == "SEBI_OBSERVATION"]) == again == 1
+    assert [e["date"] for e in b.events if e["event_type"] == "SEBI_OBSERVATION"] == [R.TODAY.isoformat()]
+    R.ingest_offerdocs(st, FakeNSE(), R.TODAY - timedelta(days=183), R.TODAY - timedelta(days=900))
+    assert len([e for e in b.events if e["event_type"] == "SEBI_OBSERVATION"]) == 1
 
 
 def test_same_day_listing_uses_live_price_until_bhavcopy_is_out(tmp_path, monkeypatch):
