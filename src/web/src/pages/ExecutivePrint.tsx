@@ -2,8 +2,8 @@ import { useId, useMemo, useState } from 'react'
 import { useVault } from '../App'
 import { Seg } from '../components/ui'
 import { chrono, forecastCagr, seriesCagr } from '../components/IndustryCharts'
-import { allLockins, byId, cmp, dayChangePct, finTable, ipo, isMine, isStub, listedOn, listingGainPct, nextEvent, returnVsIssuePct, upcomingEvents } from '../lib/derive'
-import { daysUntil, fmtDate, fmtFact, fv, inr, isoToday, pct } from '../lib/format'
+import { finTable, ipo, isStub } from '../lib/derive'
+import { daysUntil, fmtDate, fmtFact, fv, pct } from '../lib/format'
 import { FIN_ORDER } from './Company'
 import { brlms, dealSize, filedOn } from './AnchorDesk'
 import type { CompanyRecord, Fact } from '../lib/types'
@@ -11,9 +11,8 @@ import type { CompanyRecord, Fact } from '../lib/types'
 /* The Executive Print — a plain black-and-white morning report. Big type, no colour, page breaks between sections,
    built entirely from the data already in the terminal. Windows count calendar days in IST (filings carry a date, not a time). */
 
-const SIGNIFICANT = new Set(['lifecycle', 'price_band', 'issue_price', 'total_issue', 'ISSUE_OPEN', 'ISSUE_CLOSE', 'LISTING', 'RHP_FILED', 'drhp_status'])
 const cell = (f?: Fact | null) => (f && f.status === 'ok' && typeof f.value === 'number' && f.unit === 'INR crore' ? f.value.toLocaleString('en-IN', { maximumFractionDigits: Math.abs(f.value) < 100 ? 1 : 0 }) : fmtFact(f))
-const clean = (n: string) => n.replace(/ (Private )?Limited$/i, '')
+const clean = (n: string) => n.replace(/^.*?\b(?:name of the )?(?:brlms?|book running lead managers?)( and logo)?\s*/i, m => (/brlm|lead manager/i.test(m) ? '' : m)).replace(/\s*\(formerly[^)]*\)/i, '').replace(/ (Private )?Limited$/i, '').trim()
 const short = (v: number) => (Math.abs(v) >= 1000 ? v.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : Math.abs(v) >= 10 ? v.toFixed(1) : v.toFixed(2))
 const segLabel = (r: CompanyRecord) => (r.company.segment === 'SME' ? 'SME' : 'Mainboard')
 
@@ -58,8 +57,8 @@ const Legend = ({ names }: { names: string[] }) => (
   <div className="ex-legend">{names.map((n, i) => <span key={n}><i style={{ background: i === 0 ? '#000' : i === 1 ? 'repeating-linear-gradient(45deg,#000 0 3px,#fff 3px 6px)' : '#bdbdbd' }} />{n}</span>)}</div>
 )
 
-function Section({ title, children, first }: { title: string; children: React.ReactNode; first?: boolean }) {
-  return <section className={first ? 'ex-sec' : 'ex-sec ex-break'}><h2>{title}</h2>{children}</section>
+function Section({ title, children, first, big }: { title: string; children: React.ReactNode; first?: boolean; big?: boolean }) {
+  return <section className={first ? 'ex-sec' : 'ex-sec ex-break'}>{big ? <div className="ex-dossier-title">{title}</div> : <h2>{title}</h2>}{children}</section>
 }
 
 function Dossier({ r, n }: { r: CompanyRecord; n: number }) {
@@ -89,7 +88,7 @@ function Dossier({ r, n }: { r: CompanyRecord; n: number }) {
   const peers = (r.facts?.peers ?? []).slice(0, 6)
   return (
     <>
-      <Section title={`${n}. ${r.company.name}`}>
+      <Section big title={`${n}. ${r.company.name}`}>
         <p className="ex-sub">{segLabel(r)} · {r.company.sector ?? 'sector n/a'} · DRHP filed {fmtDate(filedOn(r))}{r.company.drhp_status ? ` · SEBI status: ${r.company.drhp_status}` : ''}</p>
         <h3>What the company does</h3>
         <p>{r.company.overview?.summary ? (r.company.overview.summary.length > 1500 ? r.company.overview.summary.slice(0, 1500).replace(/\s\S*$/, '') + ' …' : r.company.overview.summary) : 'Business summary not yet read from the offer document.'}</p>
@@ -145,44 +144,21 @@ export default function ExecutivePrint() {
   const v = useVault()
   const [win, setWin] = useState('1')
   const days = Number(win)
-  const today = isoToday()
-  const recent = (d?: string | null) => !!d && daysUntil(d) <= 0 && daysUntil(d) >= -days
-  const since = Date.now() - (days === 1 ? 24 : days * 24) * 3_600_000
-
-  const d = useMemo(() => {
-    const live = v.companies.filter(r => r.company.lifecycle !== 'WITHDRAWN' && !r.company.is_sample)
-    const filed = live.filter(r => recent(filedOn(r))).sort((a, b) => filedOn(b)!.localeCompare(filedOn(a)!) || a.company.name.localeCompare(b.company.name))
-    const fallback = !filed.length ? live.filter(r => filedOn(r)).sort((a, b) => filedOn(b)!.localeCompare(filedOn(a)!)).slice(0, 3) : []
-    const listings = live.filter(r => recent(listedOn(r)))
-    const approvals = live.filter(r => r.events.some(e => e.event_type === 'SEBI_OBSERVATION' && recent(e.date)))
-    const changes = v.changes.filter(c => new Date(c.detected_at).getTime() >= since && SIGNIFICANT.has(c.field))
-    const news = v.companies.flatMap(r => r.news.filter(n => new Date(n.published_at).getTime() >= since).map(n => ({ r, n })))
-      .sort((a, b) => b.n.published_at.localeCompare(a.n.published_at)).slice(0, 10)
-    const cal = upcomingEvents(v, 7, ['ISSUE_OPEN', 'ISSUE_CLOSE', 'ANCHOR_BIDDING', 'BASIS_OF_ALLOTMENT', 'LISTING', 'RHP_FILED']).filter(x => !x.r.company.is_sample)
-    const locks = allLockins(v).filter(x => x.d >= 0 && x.d <= 14)
-    const recentListed = live.filter(r => { const l = listedOn(r); return l && daysUntil(l) <= 0 && daysUntil(l) >= -45 }).sort((a, b) => listedOn(b)!.localeCompare(listedOn(a)!))
-    const mine = v.companies.filter(r => isMine(v, r.company.company_id))
-    return { filed, fallback, listings, approvals, changes, news, cal, locks, recentListed, mine }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [v, win])
-  const dossiers = (d.filed.length ? d.filed : d.fallback).slice(0, 6)
-  const extra = (d.filed.length ? d.filed : []).slice(6)
-  const when = days === 1 ? 'last 24 hours' : `last ${days} days`
+  const filed = useMemo(() => v.companies
+    .filter(r => r.company.lifecycle !== 'WITHDRAWN' && !r.company.is_sample && !r.custom)
+    .filter(r => { const f = filedOn(r); return !!f && daysUntil(f) <= 0 && daysUntil(f) >= -days })
+    .sort((a, b) => filedOn(b)!.localeCompare(filedOn(a)!) || (fv(dealSize(b).f) ?? 0) - (fv(dealSize(a).f) ?? 0)),
+  [v, days])
+  const when = days === 1 ? 'the last 24 hours' : `the last ${days} days`
   const stamp = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })
-
-  const hr = Number(new Date().toLocaleString('en-GB', { hour: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' }))
-  const part = hr < 12 ? 'Morning' : hr < 17 ? 'Afternoon' : 'Evening'
-  const edition = part.toUpperCase()
-  const issueNo = Math.floor((Date.parse(today) - Date.parse('2026-01-01')) / 86_400_000) + 1
-  const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`
-  const bits = [d.filed.length && `${plural(d.filed.length, 'new DRHP filing')}`, d.approvals.length && `${plural(d.approvals.length, 'SEBI approval')}`,
-    d.listings.length && `${plural(d.listings.length, 'new listing')}`, d.changes.length && `${plural(d.changes.length, 'significant update')}`].filter(Boolean) as string[]
-  const lead = bits.length ? `Here are the top happenings from the IPO pipeline in the ${when}: ${bits.length > 1 ? bits.slice(0, -1).join(', ') + ' and ' + bits[bits.length - 1] : bits[0]}. Turn the page for the full story, the week ahead, and a complete note on every new filing.`
-    : `It has been a quiet stretch in the IPO pipeline over the ${when}. Here is the week ahead, how recent listings are faring, and notes on the latest filings.`
-  const big = [...d.filed].sort((a, b) => (fv(dealSize(b).f) ?? 0) - (fv(dealSize(a).f) ?? 0))[0]
-  const headline = big ? { title: `${big.company.name} files its DRHP${dealSize(big).f ? ` for an issue of ${dealSize(big).text}` : ''}`, body: `${segLabel(big)} issue${big.company.sector ? ` in ${big.company.sector}` : ''}. Lead managers: ${(brlms(big).length ? brlms(big).map(b => b.name) : ipo(big)?.intermediaries?.brlms ?? ['to be announced']).map(clean).join(', ')}.${d.filed.length > 1 ? ` ${d.filed.length - 1} other filing${d.filed.length > 2 ? 's' : ''} also landed.` : ''}` }
-    : d.listings[0] ? { title: `${d.listings[0].company.name} lists on the exchange`, body: `Listed ${fmtDate(listedOn(d.listings[0]))}${listingGainPct(d.listings[0]) != null ? `, opening ${listingGainPct(d.listings[0])! >= 0 ? '+' : ''}${listingGainPct(d.listings[0])!.toFixed(1)}% against its issue price.` : '.'}` }
-    : d.approvals[0] ? { title: `${d.approvals[0].company.name} receives SEBI's go-ahead`, body: 'The observation letter has been issued; the company may now launch its IPO within 12 months.' } : null
+  const crore = (r: CompanyRecord) => { const f = dealSize(r).f; return f && /crore/i.test(f.unit ?? '') ? fv(f) ?? 0 : 0 }
+  const total = filed.reduce((s, r) => s + crore(r), 0)
+  const sized = filed.filter(r => crore(r) > 0).length
+  const main = filed.filter(r => r.company.segment !== 'SME').length
+  const banks = new Map<string, number>()
+  filed.forEach(r => (brlms(r).length ? brlms(r).map(b => b.name) : ipo(r)?.intermediaries?.brlms ?? []).forEach(b => banks.set(clean(b), (banks.get(clean(b)) ?? 0) + 1)))
+  const topBanks = [...banks.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
+  const leads = (r: CompanyRecord) => (brlms(r).length ? brlms(r).map(b => b.name) : ipo(r)?.intermediaries?.brlms ?? []).map(clean)
 
   return (
     <div className="exec-wrap">
@@ -190,85 +166,44 @@ export default function ExecutivePrint() {
         <a className="btn" href="#/">← Home</a>
         <Seg value={win} onChange={setWin} options={[{ v: '1', label: '24 hours' }, { v: '2', label: '2 days' }, { v: '7', label: '7 days' }]} />
         <button className="btn btn-primary" onClick={() => window.print()}>⎙ Print / Save as PDF</button>
-        <span className="muted text-sm">Black &amp; white · large type · one page break per section</span>
       </div>
       <article className="exec">
         <header className="ex-mast">
-          <div className="ex-ribbon"><span>PRIVATE &amp; CONFIDENTIAL</span><span className="ex-badge">{edition} EDITION</span><span>No. {issueNo}</span></div>
-          <div className="ex-orn">✦ ✦ ✦</div>
+          <div className="ex-eyebrow">Private &amp; confidential · {stamp}</div>
           <h1>The Executive Print</h1>
-          <div className="ex-tag">India's IPO pipeline, read for you</div>
-          <div className="ex-date">{stamp}</div>
+          <div className="ex-tag">New DRHP filings · {when}</div>
         </header>
 
-        <div className="ex-greet">
-          <div className="ex-hello">Good {part}.</div>
-          <p className="ex-lead">{lead}</p>
+        <div className="ex-stats">
+          <div><b>{filed.length}</b><span>new DRHP{filed.length === 1 ? '' : 's'}</span></div>
+          <div><b>{total ? `₹${Math.round(total).toLocaleString('en-IN')} cr` : '—'}</b><span>proposed · {sized} of {filed.length} disclosed</span></div>
+          <div><b>{main} · {filed.length - main}</b><span>mainboard · SME</span></div>
         </div>
+        {!!topBanks.length && <p className="ex-note">Most active lead managers: {topBanks.map(([b, n]) => `${b} (${n})`).join(', ')}.</p>}
 
-        <div className="ex-tiles">
-          {[[d.filed.length, 'New DRHP filings'], [d.approvals.length, 'SEBI approvals'], [d.listings.length, 'New listings'],
-            [d.cal.filter(x => x.e.event_type === 'ISSUE_OPEN').length, 'Issues opening, next 7 days'], [d.locks.length, 'Lock-ins ending, next 14 days'], [d.changes.length, 'Significant updates']].map(([n, l]) => (
-            <div key={l as string} className="ex-tile"><b>{n}</b><span>{l}</span></div>))}
-        </div>
+        {filed.length ? (
+          <section className="ex-sec">
+            <h2>At a glance</h2>
+            <table className="ex-table">
+              <thead><tr><th>#</th><th>Company</th><th>Segment</th><th className="r">Size</th><th>Lead managers</th><th className="r">Filed</th></tr></thead>
+              <tbody>{filed.map((r, i) => (
+                <tr key={r.company.company_id}>
+                  <td className="ex-num">{i + 1}</td>
+                  <th>{clean(r.company.name)}{r.company.sector && <div className="ex-small">{r.company.sector}</div>}</th>
+                  <td>{segLabel(r)}</td>
+                  <td className="r">{dealSize(r).text}</td>
+                  <td className="ex-small">{leads(r).join(', ') || '—'}</td>
+                  <td className="r">{fmtDate(filedOn(r), false)}</td>
+                </tr>))}</tbody>
+            </table>
+          </section>
+        ) : <p className="ex-empty">No new DRHPs were filed in {when}. Try the 2-day or 7-day view.</p>}
 
-        {headline && <aside className="ex-headline"><div className="ex-kicker">★ TOP STORY</div><div className="ex-hl">{headline.title}</div><p>{headline.body}</p></aside>}
+        {filed.slice(0, 12).map((r, i) => <Dossier key={r.company.company_id} r={r} n={i + 1} />)}
+        {filed.length > 12 && <p className="ex-note">{filed.length - 12} more filings are listed in the table above; open them in the terminal for full notes.</p>}
 
-        <div className="ex-orn">❖ ❖ ❖</div>
-
-        <Section title="The last 24 hours in detail" first>
-          <h3>New DRHP filings</h3>
-          {d.filed.length ? <ol>{d.filed.map(r => <li key={r.company.company_id}><b>{r.company.name}</b> — {segLabel(r)}, {dealSize(r).text}; lead managers: {(brlms(r).length ? brlms(r).map(b => b.name) : ipo(r)?.intermediaries?.brlms ?? ['to be read']).map(clean).join(', ')}. Filed {fmtDate(filedOn(r))}.</li>)}</ol>
-            : <p>No new DRHP filings in the {when}. {d.fallback.length ? 'The three most recent filings are profiled instead.' : ''}</p>}
-
-          <h3>SEBI approvals</h3>
-          {d.approvals.length ? <ul>{d.approvals.map(r => <li key={r.company.company_id}><b>{r.company.name}</b> — observation letter received; the company may now launch its issue (valid 12 months).</li>)}</ul> : <p>None in the {when}.</p>}
-
-          <h3>New listings</h3>
-          {d.listings.length ? <ul>{d.listings.map(r => { const g = listingGainPct(r); return <li key={r.company.company_id}><b>{r.company.name}</b> listed {fmtDate(listedOn(r))}{ipo(r) && fv(ipo(r)!.facts.issue_price) ? ` at issue price ${inr(fv(ipo(r)!.facts.issue_price))}` : ''}{g != null ? `; opened ${g >= 0 ? '+' : ''}${g.toFixed(1)}% vs issue price` : ''}.</li> })}</ul> : <p>None in the {when}.</p>}
-
-          <h3>Significant updates</h3>
-          {d.changes.length ? <ul>{d.changes.slice(0, 12).map(c => <li key={c.change_id}><b>{clean(byId(v, c.company_id)?.company.name ?? c.company_id)}</b> — {c.label ?? c.field}: {c.old == null ? 'new' : `${String(c.old)} →`} <b>{String(c.new)}</b></li>)}</ul> : <p>No material changes detected in the {when}.</p>}
-        </Section>
-
-        <Section title="The week ahead">
-          <h3>Issue calendar — next 7 days</h3>
-          {d.cal.length ? <table className="ex-table"><thead><tr><th>Date</th><th>Company</th><th>Event</th></tr></thead><tbody>
-            {d.cal.map(({ r, e }, i) => <tr key={i}><td>{fmtDate(e.date, false)}{e.date === today ? ' (today)' : ''}</td><th>{clean(r.company.name)}</th><td>{v.event_types[e.event_type]?.label ?? e.event_type}{e.date_kind === 'derived' ? ' (estimated)' : ''}</td></tr>)}</tbody></table> : <p>Nothing scheduled.</p>}
-          <h3>Lock-ins ending — next 14 days</h3>
-          {d.locks.length ? <table className="ex-table"><thead><tr><th>Date</th><th>Company</th><th>Holders</th><th className="r">% of equity</th></tr></thead><tbody>
-            {d.locks.slice(0, 15).map((x, i) => <tr key={i}><td>{fmtDate(x.l.expiry_date, false)} ({x.d}d)</td><th>{clean(x.r.company.name)}</th><td>{x.l.holder_category.replace(/_/g, ' ').toLowerCase()}</td><td className="r">{x.l.pct_post_issue?.value != null ? pct(Number(x.l.pct_post_issue.value)) : 'n/a'}</td></tr>)}</tbody></table> : <p>No lock-in expiries.</p>}
-          <p className="ex-small">Anchor lock-ins: the last locked day is shown; shares are tradable from the next business day.</p>
-        </Section>
-
-        <Section title="Recent listings — how are they doing?" first>
-          {d.recentListed.length ? <table className="ex-table"><thead><tr><th>Company</th><th>Listed</th><th className="r">Issue ₹</th><th className="r">Listing gain</th><th className="r">Now ₹</th><th className="r">Since issue</th></tr></thead><tbody>
-            {d.recentListed.slice(0, 14).map(r => { const g = listingGainPct(r), t = returnVsIssuePct(r); return (
-              <tr key={r.company.company_id}><th>{clean(r.company.name)}</th><td>{fmtDate(listedOn(r), false)}</td><td className="r">{ipo(r) && fv(ipo(r)!.facts.issue_price) ? inr(fv(ipo(r)!.facts.issue_price)) : '—'}</td>
-                <td className="r">{g != null ? `${g >= 0 ? '+' : ''}${g.toFixed(1)}%` : '—'}</td><td className="r">{cmp(r) != null ? inr(cmp(r), 2) : '—'}</td><td className="r">{t != null ? `${t >= 0 ? '+' : ''}${t.toFixed(1)}%` : '—'}</td></tr>) })}</tbody></table> : <p>No listings in the last 45 days.</p>}
-          {!!d.mine.length && <>
-            <h3>Your investments and tracked companies</h3>
-            <table className="ex-table"><thead><tr><th>Company</th><th>Stage</th><th className="r">Price ₹</th><th className="r">Today</th><th>Next</th></tr></thead><tbody>
-              {d.mine.slice(0, 14).map(r => { const ne = nextEvent(r), dc = dayChangePct(r); return (
-                <tr key={r.company.company_id}><th>{clean(r.company.name)}</th><td>{r.company.lifecycle.replace(/_/g, ' ').toLowerCase()}</td><td className="r">{cmp(r) != null ? inr(cmp(r), 2) : '—'}</td>
-                  <td className="r">{dc != null ? `${dc >= 0 ? '+' : ''}${dc.toFixed(1)}%` : '—'}</td><td>{ne ? `${v.event_types[ne.event_type]?.label ?? ne.event_type}, ${fmtDate(ne.date, false)}` : '—'}</td></tr>) })}</tbody></table>
-          </>}
-          {!!d.news.length && <>
-            <h3>Headlines — {when}</h3>
-            <ul>{d.news.map(({ r, n }) => <li key={n.news_id}><b>{clean(r.company.name)}</b> — {n.title} <span className="ex-small">({n.publisher ?? n.category})</span></li>)}</ul>
-          </>}
-        </Section>
-
-        {dossiers.map((r, i) => <Dossier key={r.company.company_id} r={r} n={i + 1} />)}
-
-        {!!extra.length && <Section title="Also filed">
-          <table className="ex-table"><thead><tr><th>Company</th><th>Segment</th><th>Size</th><th>Filed</th></tr></thead><tbody>
-            {extra.map(r => <tr key={r.company.company_id}><th>{r.company.name}</th><td>{segLabel(r)}</td><td>{dealSize(r).text}</td><td>{fmtDate(filedOn(r), false)}</td></tr>)}</tbody></table>
-        </Section>}
-
-        <footer className="ex-foot">Sources: SEBI, NSE and BSE filings and the offer documents themselves; every figure can be traced in the terminal. Lock-in dates and growth rates marked “calculated” are computed by the terminal. This report is for internal discussion and is not investment advice.</footer>
+        <footer className="ex-foot">Sources: SEBI, NSE and BSE filings and the offer documents themselves. Growth rates are calculated by the terminal from the printed figures. For internal discussion; not investment advice.</footer>
       </article>
     </div>
   )
 }
-

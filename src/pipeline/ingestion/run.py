@@ -217,6 +217,7 @@ def ingest_offerdocs(st: State, nse: N.NSE, since: date, drhp_since: date | None
             b = st.company(name, isin=r.get("isin"), pan=r.get("pan_no"), symbol=None if r.get("symbol") in (None, "-") else r["symbol"],
                            segment=segment, source="NSE-offerdocs")
             reg = f"https://www.nseindia.com/companies-listing/public-issues-offer-documents"
+            prev_status = (b.company.get("drhp_status") or "").strip().lower()
             if r.get("drhpStatus"):
                 b.company["drhp_status"] = r["drhpStatus"]
             for key, dt, etype, label in (("drhpAttach", "drhpDate", "DRHP_FILED", "DRHP"), ("rhpAttach", "rhpDate", "RHP_FILED", "RHP"),
@@ -231,8 +232,11 @@ def ingest_offerdocs(st: State, nse: N.NSE, since: date, drhp_since: date | None
                     upsert_event(b, etype, d, "actual", src(label if label != "ADVERTISEMENT" else "EXCHANGE_ANNOUNCEMENT", url))
             if status in ("withdrawn", "returned"):
                 b.company["lifecycle"] = "WITHDRAWN"
-            if status == "approved" and not any(e["event_type"] == "SEBI_OBSERVATION" for e in b.events):
-                # The register publishes the status but not the observation date, so record the day we first saw it.
+            later = any(e["event_type"] in ("RHP_FILED", "PROSPECTUS_FILED", "ISSUE_OPEN", "LISTING") for e in b.events)
+            if (status == "approved" and prev_status and prev_status != "approved" and not later
+                    and not any(e["event_type"] == "SEBI_OBSERVATION" for e in b.events)):
+                # The register publishes the status but not the observation date: record the day the status actually
+                # changed to Approved (only on a real change we observed — never for filings that were already approved).
                 upsert_event(b, "SEBI_OBSERVATION", TODAY.isoformat(), "actual", src("EXCHANGE_ANNOUNCEMENT", reg),
                              detail="SEBI approval (observation letter) — status 'Approved' on the NSE offer-document register; date = first seen")
             n += 1
@@ -625,6 +629,14 @@ def update_market(st: State, client: Client) -> None:
 
 
 # ───────────────────────── lifecycle, changes ─────────────────────────
+def drop_bogus_observations(b: CompanyBundle) -> None:
+    """Remove 'first seen' SEBI_OBSERVATION events that were stamped in bulk on 2026-10-06 (status already Approved long
+    before) or that sit on companies already past the RHP / listing stage."""
+    later = any(e["event_type"] in ("RHP_FILED", "PROSPECTUS_FILED", "ISSUE_OPEN", "LISTING") for e in b.events)
+    b.events = [e for e in b.events if not (e["event_type"] == "SEBI_OBSERVATION" and "first seen" in (e.get("detail") or "")
+                                            and (later or e["date"] == "2026-10-06"))]
+
+
 def lifecycle(b: CompanyBundle) -> str:
     if b.company["lifecycle"] == "WITHDRAWN" and not any(e["event_type"] == "ISSUE_OPEN" for e in b.events):
         return "WITHDRAWN"
@@ -775,6 +787,7 @@ def main(argv=None) -> int:
         write_json(DATA / "index" / "redirects.json", redirects)
         st.reindex()
     for b in st.bundles.values():
+        drop_bogus_observations(b)
         b.company["lifecycle"] = lifecycle(b)
         save_company(b)  # checkpoint: discovery is never lost if a later phase times out
     if "market" not in skip:

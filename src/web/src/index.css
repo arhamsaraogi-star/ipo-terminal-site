@@ -205,65 +205,66 @@ body {
 }
 
 /* ───────────── The Executive Print: plain black & white, large type, built to be printed ───────────── */
-.exec-wrap { max-width: 900px; margin: 0 auto; }
-.exec-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
-.exec { background: #fff; color: #000; font-family: Georgia, 'Times New Roman', serif; font-size: 19px; line-height: 1.55; padding: 40px 44px; border-radius: 6px; box-shadow: 0 6px 30px rgba(0,0,0,.35); }
-.exec a { color: #000; text-decoration: underline; }
-.exec h1 { font-size: 54px; line-height: 1.05; font-weight: 800; margin: 6px 0 8px; letter-spacing: -.5px; }
-.exec h2 { font-size: 32px; font-weight: 800; border-bottom: 4px solid #000; padding-bottom: 6px; margin: 0 0 14px; }
-.exec h3 { font-size: 23px; font-weight: 800; margin: 22px 0 6px; border-bottom: 1px solid #000; padding-bottom: 2px; }
-.exec p, .exec li { margin: 6px 0; }
-.exec ol, .exec ul { padding-left: 26px; margin: 6px 0; }
-.exec li { margin: 8px 0; }
-.ex-mast { border-top: 6px double #000; border-bottom: 6px double #000; text-align: center; padding: 14px 0 12px; margin-bottom: 26px; }
-.ex-date { font-size: 24px; font-weight: 700; }
-.ex-small { font-size: 15px; color: #222; }
-.ex-sub { font-size: 18px; font-weight: 700; margin: 0 0 4px; }
-.ex-table { width: 100%; border-collapse: collapse; margin: 8px 0 10px; font-size: 17px; }
-.ex-table th, .ex-table td { border: 1.5px solid #000; padding: 6px 9px; text-align: left; vertical-align: top; }
-.ex-table thead th { border-bottom: 3px solid #000; background: #fff; font-weight: 800; }
-.ex-table tbody th { font-weight: 700; }
-.ex-table .r { text-align: right; white-space: nowrap; }
-.ex-fin { font-size: 15.5px; }
-.ex-kpi th { width: 74%; font-size: 19px; } .ex-kpi td { font-size: 24px; font-weight: 800; text-align: right; }
-.ex-fig { margin: 14px 0 6px; break-inside: avoid; }
-.ex-legend { display: flex; gap: 22px; flex-wrap: wrap; font-size: 16px; margin: 2px 0 6px; }
-.ex-legend i { display: inline-block; width: 22px; height: 14px; border: 2px solid #000; margin-right: 8px; vertical-align: -2px; }
-.ex-foot { margin-top: 30px; border-top: 3px solid #000; padding-top: 10px; font-size: 14px; }
-.ex-sec { margin-bottom: 18px; }
-.ex-break { break-before: page; page-break-before: always; margin-top: 44px; }
 @media print {
-  .exec-noprint { display: none !important; }
-  .exec-wrap { max-width: none; }
-  .exec { box-shadow: none; border-radius: 0; padding: 0; font-size: 14.5pt; }
-  .exec h1 { font-size: 40pt; } .exec h2 { font-size: 24pt; } .exec h3 { font-size: 17pt; }
-  .ex-table { font-size: 12.5pt; } .ex-fin { font-size: 11.5pt; } .ex-small { font-size: 11pt; } .ex-legend { font-size: 12pt; }
-  .ex-break { margin-top: 0; }
-  .ex-table tr, figure { break-inside: avoid; }
   h2, h3 { break-after: avoid; }
   header.topbar, .topbar { display: none !important; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 
 /* Executive Print — front page flourishes */
-.ex-ribbon { display: flex; justify-content: space-between; align-items: center; font-size: 14px; letter-spacing: 3px; font-weight: 700; }
-.ex-badge { background: #000; color: #fff; padding: 4px 16px; letter-spacing: 4px; }
-.ex-orn { text-align: center; font-size: 22px; letter-spacing: 14px; margin: 8px 0; }
-.ex-tag { font-style: italic; font-size: 22px; margin-bottom: 6px; }
-.ex-hello { font-size: 74px; line-height: 1; font-weight: 800; font-style: italic; letter-spacing: -1px; }
-.ex-lead { font-size: 26px; line-height: 1.4; margin: 12px 0 4px; border-left: 8px solid #000; padding-left: 18px; }
-.ex-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 22px 0; }
-.ex-tile { border: 4px solid #000; padding: 10px 12px 12px; text-align: center; box-shadow: 6px 6px 0 #000; }
-.ex-tile b { display: block; font-size: 64px; line-height: 1; font-weight: 800; }
-.ex-tile span { display: block; font-size: 16px; font-weight: 700; margin-top: 4px; }
-.ex-headline { border: 5px double #000; padding: 16px 22px; margin: 8px 0 14px; }
-.ex-kicker { font-size: 15px; font-weight: 800; letter-spacing: 5px; }
-.ex-hl { font-size: 34px; line-height: 1.15; font-weight: 800; margin: 6px 0; }
-.ex-headline p { font-size: 20px; margin: 4px 0 0; }
-.exec h2::before { content: '§'; display: inline-block; background: #000; color: #fff; padding: 0 12px; margin-right: 12px; }
 @media (max-width: 640px) { .ex-tiles { grid-template-columns: 1fr 1fr; } .ex-hello { font-size: 48px; } .exec { padding: 22px 16px; } .exec h1 { font-size: 38px; } .ex-lead { font-size: 21px; } }
-@media print {
-  .ex-hello { font-size: 54pt; } .ex-lead { font-size: 17pt; } .ex-tile b { font-size: 44pt; } .ex-tile span { font-size: 11.5pt; } .ex-hl { font-size: 24pt; } .ex-headline p { font-size: 14pt; }
-  .ex-orn { font-size: 16pt; } .ex-tag { font-size: 15pt; } .ex-date { font-size: 17pt; }
-}
+
 @media print { div:has(> main.page) > :not(main.page):not(aside) { display: none !important; } }
+
+/* ───────── The Executive Print — calm, print-first report ───────── */
+.exec-wrap { max-width: 920px; margin: 0 auto; }
+.exec-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+.exec { background: #fbfaf7; color: #161616; font-family: 'Iowan Old Style', Georgia, 'Times New Roman', serif; font-size: 17px; line-height: 1.6;
+  padding: 56px 64px; border-radius: 4px; box-shadow: 0 10px 40px rgba(0,0,0,.35); }
+.exec a { color: inherit; }
+.exec h1, .exec h2, .exec h3, .ex-eyebrow, .ex-tag, .ex-stats, .ex-table thead th, .ex-num { font-family: Inter, 'Helvetica Neue', Arial, sans-serif; }
+.ex-mast { text-align: center; padding-bottom: 22px; border-bottom: 1px solid #161616; margin-bottom: 28px; }
+.ex-eyebrow { font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: #6b6b6b; }
+.exec h1 { font-family: 'Iowan Old Style', Georgia, serif; font-size: 52px; font-weight: 700; letter-spacing: -.02em; line-height: 1.05; margin: 10px 0 8px; }
+.ex-tag { font-size: 13px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; }
+.ex-stats { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid #161616; border-bottom: 1px solid #161616; margin: 8px 0 14px; }
+.ex-stats > div { padding: 16px 12px; text-align: center; }
+.ex-stats > div + div { border-left: 1px solid #d6d3cc; }
+.ex-stats b { display: block; font-size: 30px; font-weight: 700; letter-spacing: -.01em; line-height: 1.1; }
+.ex-stats span { display: block; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: #6b6b6b; margin-top: 4px; }
+.ex-note { font-size: 15px; color: #444; font-style: italic; text-align: center; margin: 0 0 26px; }
+.ex-empty { text-align: center; font-size: 18px; color: #555; padding: 40px 0; }
+.exec h2 { font-size: 13px; letter-spacing: .2em; text-transform: uppercase; font-weight: 700; color: #161616; margin: 0 0 12px; padding-bottom: 8px; border-bottom: 2px solid #161616; }
+.ex-dossier-title { font-family: 'Iowan Old Style', Georgia, serif; font-size: 30px; font-weight: 700; letter-spacing: -.01em; line-height: 1.15; margin: 0 0 4px; }
+.exec h3 { font-size: 12px; letter-spacing: .18em; text-transform: uppercase; font-weight: 700; color: #6b6b6b; margin: 26px 0 8px; }
+.exec p, .exec li { margin: 6px 0; }
+.exec ol, .exec ul { padding-left: 22px; margin: 6px 0; }
+.ex-sub { font-size: 14px; color: #555; margin: 0 0 6px; }
+.ex-small { font-size: 13px; color: #6b6b6b; }
+.ex-table { width: 100%; border-collapse: collapse; margin: 6px 0 12px; font-size: 15px; }
+.ex-table th, .ex-table td { padding: 9px 10px; text-align: left; vertical-align: top; border-bottom: 1px solid #e3e0d9; }
+.ex-table thead th { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: #6b6b6b; font-weight: 600; border-bottom: 1.5px solid #161616; }
+.ex-table tbody th { font-weight: 600; }
+.ex-table .r { text-align: right; white-space: nowrap; }
+.ex-num { color: #9a9a9a; font-size: 13px; width: 28px; }
+.ex-fin { font-size: 13.5px; } .ex-fin td, .ex-fin th { padding: 6px 8px; }
+.ex-fig { margin: 16px 0 8px; break-inside: avoid; }
+.ex-fig figcaption { font-size: 15px; margin-bottom: 4px; }
+.ex-legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; color: #444; margin: 2px 0 6px; }
+.ex-legend i { display: inline-block; width: 16px; height: 10px; border: 1.5px solid #161616; margin-right: 6px; vertical-align: -1px; }
+.ex-sec { margin-bottom: 22px; }
+.ex-break { break-before: page; page-break-before: always; margin-top: 56px; padding-top: 28px; border-top: 1px solid #d6d3cc; }
+.ex-foot { margin-top: 36px; border-top: 1px solid #161616; padding-top: 10px; font-size: 12px; color: #6b6b6b; text-align: center; }
+@media (max-width: 640px) {
+  .exec { padding: 26px 18px; font-size: 16px; } .exec h1 { font-size: 34px; } .ex-stats b { font-size: 20px; } .ex-dossier-title { font-size: 24px; }
+  .ex-table { font-size: 13.5px; } .ex-table th, .ex-table td { padding: 7px 6px; }
+}
+@media print {
+  .exec-noprint { display: none !important; }
+  .exec-wrap { max-width: none; }
+  .exec { box-shadow: none; border-radius: 0; padding: 0; background: #fff; font-size: 12pt; }
+  .exec h1 { font-size: 36pt; } .ex-dossier-title { font-size: 22pt; }
+  .ex-table { font-size: 10.5pt; } .ex-fin { font-size: 9.5pt; }
+  .ex-break { margin-top: 0; border-top: none; padding-top: 0; }
+  .ex-table tr, figure { break-inside: avoid; }
+}
