@@ -627,7 +627,11 @@ def update_market(st: State, client: Client) -> None:
             wanted[cid] = {"name": b.company["name"], "isin": ids.get("isin"), "listing": None}   # an RHP / prospectus exists: is it trading?
     if wanted:
         try:
-            for cid, code in M.update_bse(client, wanted, budget_ok=lambda: not out_of_time(0.6), log=st.log.append).items():
+            found_bse = M.update_bse(client, wanted, budget_ok=lambda: not out_of_time(0.6), log=st.log.append)
+            miss = sorted(w["name"] for cid, w in wanted.items() if cid not in found_bse and not w.get("listing"))
+            if miss:                                                  # visible on the Needs Review page: what we could not place
+                st.log.append(f"Older issues not found on BSE's daily price file ({len(miss)}): " + "; ".join(miss[:25]))
+            for cid, code in found_bse.items():
                 st.bundles[cid].company["identifiers"]["bse_code"] = code
                 if not any(e["event_type"] == "LISTING" and e["date_kind"] != "derived" for e in st.bundles[cid].events):
                     st.bundles[cid].company["exchange_listed"] = "BSE"       # trading on BSE, listing date unknown
@@ -661,6 +665,9 @@ def lifecycle(b: CompanyBundle) -> str:
     lst, op, cl = first("LISTING"), first("ISSUE_OPEN"), first("ISSUE_CLOSE")
     if lst and lst <= t:
         return "LISTED"
+    pro = first("PROSPECTUS_FILED")
+    if pro and pro <= (TODAY - timedelta(days=21)).isoformat():
+        return "LISTED"          # the final prospectus is filed when the issue prices; weeks later the shares are trading
     if cl and cl < t:
         return "ISSUE_CLOSED"
     if op and op <= t:

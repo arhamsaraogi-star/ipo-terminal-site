@@ -216,3 +216,14 @@ def test_bad_stored_overview_is_rederived_from_saved_page_text(tmp_path, monkeyp
     assert R.refresh_overviews(st) == 1
     assert b.company["overview"]["summary"].startswith("Yash Highvoltage Limited is engaged")
     assert R.refresh_overviews(st) == 0       # a good overview is left alone
+
+
+def test_old_prospectus_means_listed_even_when_no_exchange_match_is_found():
+    from datetime import timedelta
+    from pipeline.common.store import CompanyBundle
+    from pipeline.ingestion import run as R
+    def bundle(pro_date):
+        return CompanyBundle(company={"company_id": "y", "name": "Y", "lifecycle": "RHP_FILED"},
+                             events=[{"event_type": "RHP_FILED", "date": "2024-12-05", "date_kind": "actual"}, {"event_type": "PROSPECTUS_FILED", "date": pro_date, "date_kind": "actual"}])
+    assert R.lifecycle(bundle("2024-12-20")) == "LISTED"
+    assert R.lifecycle(bundle((R.TODAY - timedelta(days=3)).isoformat())) == "RHP_FILED"     # just priced: not yet trading

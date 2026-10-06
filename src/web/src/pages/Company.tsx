@@ -168,6 +168,21 @@ function ReadMore({ text }: { text: string }) {
     {text.length > 320 && <button className="text-sm mt-1" style={{ color: 'var(--accent)' }} onClick={() => setOpen(o => !o)}>{open ? 'Show less' : 'Read more'}</button>}</div>
 }
 
+/** A listed company's offer-document numbers are the ones printed for the IPO; say so when they are out of date. */
+function IpoVintageNote({ r }: { r: CompanyRecord }) {
+  const fy = latest(r, 'revenue_from_operations')?.period ?? latest(r, 'pat')?.period
+  const y = fy ? Number(fy.replace(/\D/g, '')) : null
+  const d = new Date(), lastDone = d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1   // FY ending 31 Mar of this year is complete from April
+  if (r.company.lifecycle !== 'LISTED' || r.company.external || !y || y >= lastDone) return null
+  return (
+    <Card solid>
+      <p className="ink2">Figures on this page are from the offer document at the IPO ({fy}) — the latest year the document covers, not the company's latest results.
+        {r.listed?.results?.length ? ' Latest quarterly results from NSE are shown above.' : r.company.identifiers.nse_symbol ? ' Track this company to pull its latest results from NSE.' : ' Results since listing are not available from the exchange feeds this terminal can read.'}
+        {r.company.identifiers.nse_symbol && <> <a href={screenerUrl(r.company.identifiers.nse_symbol)} target="_blank" rel="noreferrer">Open on Screener ↗</a></>}</p>
+    </Card>
+  )
+}
+
 function ListedKeyData({ r }: { r: CompanyRecord }) {
   const d = r.listed, p = d?.profile
   if (!d) return <Card title="Key data" solid><p className="ink2">Fetching this company's data from NSE — it appears after the next refresh (about 15 minutes).</p></Card>
@@ -211,6 +226,7 @@ function Overview({ r }: { r: CompanyRecord }) {
       )}
       <PriceChart r={r} />
       {r.listed && <ListedKeyData r={r} />}
+      <IpoVintageNote r={r} />
       {!r.company.external && <AnchorCard r={r} />}
       {!r.company.external && <div className="grid xl:grid-cols-2 gap-5">
         <DealTeam r={r} />
@@ -235,7 +251,7 @@ function FinancialSnapshot({ r }: { r: CompanyRecord }) {
   if (!rev && !pat) return null
   const margin = em ? fv(em) : fv(ebitda) != null && fv(rev) ? (fv(ebitda)! / fv(rev)!) * 100 : null
   return (
-    <Card title={`Financial snapshot · ${rev?.period ?? pat?.period ?? ''}`} solid>
+    <Card title={`${r.company.lifecycle === 'LISTED' && !r.company.external ? 'At the IPO' : 'Financial snapshot'} · ${rev?.period ?? pat?.period ?? ''}`} solid>
       <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         <M label="Revenue"><FactValue f={rev} /></M>
         <M label="EBITDA"><FactValue f={ebitda} /></M>
@@ -326,6 +342,7 @@ function Financials({ r }: { r: CompanyRecord }) {
   return <FinancialsFiled r={r} />
 }
 function FinancialsFiled({ r }: { r: CompanyRecord }) {
+  const note = <IpoVintageNote r={r} />
   const { periods, byMetric } = finTable(r)
   if (!periods.length) {
     const queued = r.documents.some(d => ['DRHP', 'RHP', 'PROSPECTUS', 'UDRHP'].includes(d.doc_type) && /\.(pdf|zip)$/i.test(d.url))
@@ -357,6 +374,7 @@ function FinancialsFiled({ r }: { r: CompanyRecord }) {
         </div>
         <p className="muted text-xs">₹ crore. * = part-year (stub) period. Margins are as printed in the document, or calculated where not printed.</p>
       </Card>
+      {note}
       <CashFlowCard r={r} />
       <Card title="Restated financials (₹ crore unless stated)" solid>
         <Table wide rows={FIN_ORDER.filter(([m]) => byMetric.has(m))} cols={[

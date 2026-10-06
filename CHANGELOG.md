@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.3 — listed from the prospectus, honest IPO-vintage labels
+- A company whose final prospectus was filed 3+ weeks ago is Listed, even when no exchange file match is found
+- Older issues the exchange files could not place are listed on the Needs Review page, so unmatched names are visible
+- Listed companies label offer-document figures "At the IPO · FY20xx" and say when they are not the latest results, with the Screener link and the Track-for-NSE-results hint
+
 ## 0.10.2 — Executive Print makes sense
 - Business overview: disclaimers, definitions and non-GAAP notes are no longer mistaken for the company description; every stored overview is re-checked against the saved page text on each run (no PDF re-download), and a bad one is replaced or hidden
 - Financials: years that have not ended (FY2027+ in October 2026) and empty columns are dropped; identical balance-sheet columns (a misread) are left out with a note
