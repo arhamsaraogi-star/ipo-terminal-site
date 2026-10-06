@@ -1,7 +1,7 @@
 import { useVault, go } from '../App'
 import { SinceLastVisit } from '../components/Insights'
 import { Card, Delta, Kpi, Pill, Stage, Table } from '../components/ui'
-import { allLockins, cmp, eventDate, ipo, issuePrice, issueSize, listedOn, listingGainPct, priceBand, returnVsIssuePct, upcomingEvents, inScope, isHeld } from '../lib/derive'
+import { isLiveDrhp, allLockins, cmp, eventDate, ipo, issuePrice, issueSize, listedOn, listingGainPct, priceBand, returnVsIssuePct, upcomingEvents, inScope, isHeld } from '../lib/derive'
 import { crore, daysUntil, fmtDate, fmtDateTime, inr, pct, urgency } from '../lib/format'
 import { HoldingsTable, ReturnsStrip, TrackingTable } from './Portfolio'
 import { brlms, dealSize, filedOn } from './AnchorDesk'
@@ -140,7 +140,7 @@ function IpoNews() {
 
 function NewFilings() {
   const v = useVault()
-  const rows = v.companies.filter(r => { const d = filedOn(r); return d && -daysUntil(d) <= 14 }).sort((a, b) => filedOn(b)!.localeCompare(filedOn(a)!)).slice(0, 8)
+  const rows = v.companies.filter(r => { const d = filedOn(r); return d && -daysUntil(d) <= 14 && isLiveDrhp(r) }).sort((a, b) => filedOn(b)!.localeCompare(filedOn(a)!)).slice(0, 8)
   return (
     <Card title="New filings · last 14 days" action={<a className="btn btn-primary" href="#/anchor">Anchor Desk →</a>} solid>
       <Table rows={rows} onRow={r => go(`/company/${r.company.company_id}`)} empty="No new DRHPs in the last 14 days" cols={[

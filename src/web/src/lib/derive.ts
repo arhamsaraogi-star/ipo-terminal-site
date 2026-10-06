@@ -250,3 +250,8 @@ export function expectedWindow(r: CompanyRecord, st: ReturnType<typeof timelineS
   if (!f || p25 == null || p75 == null || p50 == null || n < 8) return null
   return { from: addDays(f, p25), mid: addDays(f, p50), to: addDays(f, p75), n }
 }
+
+/** A genuinely new draft filing: still at the DRHP / SEBI-approval stage, with no RHP, prospectus or listing on record.
+ *  (An exchange page can show a fresh date for an old filing; a company that has already issued is never a "new DRHP".) */
+export const isLiveDrhp = (r: CompanyRecord) => ['DRHP_FILED', 'SEBI_OBSERVED'].includes(r.company.lifecycle)
+  && !r.events.some(e => ['RHP_FILED', 'PROSPECTUS_FILED', 'LISTING', 'ISSUE_OPEN'].includes(e.event_type) && e.date_kind !== 'derived')

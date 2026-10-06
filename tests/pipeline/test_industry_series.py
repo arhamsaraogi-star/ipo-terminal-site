@@ -35,3 +35,17 @@ def test_table_rows():
 def test_statement():
     [s] = scan_text("India's organised brokerage market grew from ~₹77 Bn in 2021 to ~₹215 Bn in 2025, and is projected to reach ₹500 Bn by 2030E.", 9)
     assert s.periods == ["2021", "2025", "2030E"] and s.rows[0]["values"] == [77, 215, 500] and s.projected == [False, False, True]
+
+
+def test_overview_skips_disclaimers_and_finds_the_business_description():
+    from pipeline.extraction.offer_doc import scan_overview, good_overview
+    filler = ["cover page"] * 12
+    gaap = ("OUR BUSINESS\n\nWe have included certain non-GAAP financial measures and other performance indicators relating to our financial performance "
+            "and business in this Draft Red Herring Prospectus, each of which are supplemental measures of our performance and are not required by Ind AS, IFRS or U.S. GAAP.")
+    real = ("OUR BUSINESS\n\nOverview\n\nYash Highvoltage Limited is engaged in the manufacturing and distribution of a wide range of transformer bushings, including "
+            "oil impregnated paper condenser bushings and high current bushings. We also provide repairing, retrofitting and replacement services for old bushings "
+            "through our team of experienced engineers.\n\nOur factory is located near Vadodara, Gujarat and serves utilities and equipment makers across India.")
+    txt, page = scan_overview(filler + [gaap, real])
+    assert txt and txt.startswith("Yash Highvoltage Limited is engaged") and page == 14
+    assert scan_overview(filler + [gaap]) == (None, None)
+    assert not good_overview("We have included certain non-GAAP financial measures and other performance indicators in this Draft Red Herring Prospectus " * 2)

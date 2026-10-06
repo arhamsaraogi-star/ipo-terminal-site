@@ -807,6 +807,10 @@ def main(argv=None) -> int:
         print('▶ extract_documents', flush=True)
         left_min = (BUDGET[0] * 0.85 - (__import__('time').monotonic() - _T0)) / 60
         extract_documents(st, client, a.cover_budget, minutes=max(2.0, left_min))
+        try:
+            refresh_overviews(st)
+        except Exception as e:  # noqa: BLE001 — never fatal
+            st.failures.append(f"overview refresh: {str(e)[:100]}")
     if "news" not in skip:
         print('▶ ingest_news', flush=True)
         ingest_news(st, nse, a.news_companies)
@@ -958,6 +962,38 @@ def extract_documents(st: State, client: Client, budget: int, minutes: float = 3
                 break
     left = max(0, len(queue) - done - failed)
     st.log.append(f"Offer documents: {done} read (cover + financials + peers + industry), {failed} failed, {left} queued for next runs")
+
+
+def refresh_overviews(st: State) -> int:
+    """Re-derive each company's business description from the page text already stored on disk (no PDF is downloaded).
+    A stored overview that is not a business description (a definitions page, a disclaimer) is replaced, or cleared."""
+    import gzip
+    from pipeline.extraction.offer_doc import good_overview, scan_overview
+    fixed = 0
+    for b in st.bundles.values():
+        cur = b.company.get("overview")
+        if cur and good_overview(cur.get("summary") or ""):
+            continue
+        d = best_document(b)
+        sha = (d or {}).get("sha256")
+        tdir = DATA / "text" / sha[:16] if sha else None
+        if not tdir or not tdir.exists():
+            if cur:
+                b.company["overview"] = None
+                fixed += 1
+            continue
+        pages = [gzip.decompress(f.read_bytes()).decode("utf-8") for f in sorted(tdir.glob("p*.txt.gz"))]
+        txt, page = scan_overview(pages)
+        if txt:
+            st_type = d["doc_type"] if d["doc_type"] in ("DRHP", "RHP", "UDRHP", "PROSPECTUS") else "DRHP"
+            b.company["overview"] = {"summary": txt, "source": src(st_type, d["url"], page=page, table="Our Business — Overview", doc_id=d["document_id"])}
+            fixed += 1
+        elif cur:
+            b.company["overview"] = None
+            fixed += 1
+    if fixed:
+        st.log.append(f"Business descriptions re-derived from stored text: {fixed}")
+    return fixed
 
 
 def apply_body(b: CompanyBundle, d: dict, r, sha: str) -> None:

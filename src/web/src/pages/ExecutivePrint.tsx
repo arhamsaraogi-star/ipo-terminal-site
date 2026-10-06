@@ -1,7 +1,8 @@
 import { useId, useMemo } from 'react'
 import { useVault } from '../App'
 import { chrono, forecastCagr, seriesCagr } from '../components/IndustryCharts'
-import { ipo, isMine, isStub, dayChangePct, cmp } from '../lib/derive'
+import { ipo, isLiveDrhp, isMine, isStub, dayChangePct, cmp } from '../lib/derive'
+import { goodOverview } from '../lib/overview'
 import { finModel, fmtFin } from '../lib/fin'
 import { daysUntil, fmtDate, fmtFact, fv, isoToday } from '../lib/format'
 import { intelKey } from '../lib/portfolio'
@@ -101,6 +102,9 @@ function Dossier({ r, n }: { r: CompanyRecord; n: number }) {
   const peers = (r.facts?.peers ?? []).filter(p => !/our company|\bthe company\b/i.test(p.name) && !p.name.toLowerCase().includes(r.company.name.toLowerCase().split(' ')[0])).slice(0, 6)
   const fresh = fv(F.fresh_issue) ?? fv(F.drhp_fresh_issue), ofs = fv(F.ofs) ?? fv(F.drhp_ofs)
   const crs = (x: number | null) => (x != null ? `₹${Math.round(x).toLocaleString('en-IN')} cr` : '—')
+  const facts = ([['Issue size', dealSize(r).text], ['Fresh issue', fresh != null ? crs(fresh) : '—'], ['Offer for sale', ofs != null ? crs(ofs) : '—'],
+    ['Latest revenue', crs(at('rev', L))], ['Revenue growth', revCagr ? `${revCagr.pct.toFixed(1)}% a year` : '—']] as [string, string][]).filter(f => f[1] !== '—').slice(0, 4)
+  const about = goodOverview(r.company.overview?.summary) ? r.company.overview!.summary : null
   return (
     <>
       <section className="ex-page">
@@ -111,22 +115,18 @@ function Dossier({ r, n }: { r: CompanyRecord; n: number }) {
             <div className="ex-sub">{[segLabel(r), r.company.sector, `DRHP filed ${fmtDate(filedOn(r))}`, r.company.drhp_status && `SEBI: ${r.company.drhp_status}`].filter(Boolean).join(' · ')}</div>
           </div>
         </div>
-        <div className="ex-facts">
-          <div><span>Issue size</span><b>{dealSize(r).text}</b></div>
-          <div><span>Fresh / offer for sale</span><b>{crs(fresh)} / {crs(ofs)}</b></div>
-          <div><span>Latest revenue</span><b>{crs(at('rev', L))}</b></div>
-          <div><span>Revenue growth</span><b>{revCagr ? `${revCagr.pct.toFixed(1)}% a year` : '—'}</b></div>
-        </div>
-        <p className="ex-lm"><b>Lead managers:</b> {leads.length ? leads.join(', ') : 'not yet read'}{r.company.promoters?.length ? <> · <b>Promoters:</b> {r.company.promoters.join(', ')}</> : null}</p>
+        {facts.length >= 2 && <div className="ex-facts">{facts.map(([l, v]) => <div key={l}><span>{l}</span><b>{v}</b></div>)}</div>}
+        {(leads.length > 0 || !!r.company.promoters?.length) && <p className="ex-lm">{leads.length > 0 && <><b>Lead managers:</b> {leads.join(', ')}</>}{leads.length > 0 && !!r.company.promoters?.length && ' · '}{!!r.company.promoters?.length && <><b>Promoters:</b> {r.company.promoters.join(', ')}</>}</p>}
         <h3>What the company does</h3>
-        {(r.company.overview?.summary ?? 'Business summary will appear once the offer document has been read.').split(/\n+/).map((t, i) => <p key={i}>{t}</p>)}
-        {r.company.overview?.source?.page ? <p className="ex-small">From “Our Business — Overview”, page {r.company.overview.source.page} of the offer document.</p> : null}
-        <h3>The offer</h3>
+        {about ? <>{about.split(/\n+/).map((t, i) => <p key={i}>{t}</p>)}
+          {r.company.overview?.source?.page ? <p className="ex-small">From “Our Business — Overview”, page {r.company.overview.source.page} of the offer document.</p> : null}</>
+          : <p className="ex-small">The business description could not be read reliably from the offer document yet. It will appear in the next edition once the document has been re-read.</p>}
+        {(offer.length > 0 || dealSize(r).text !== '—' || !!o?.intermediaries?.registrar) && <><h3>The offer</h3>
         <table className="ex-table"><tbody>
-          <tr><th>Size</th><td>{dealSize(r).text}</td></tr>
+          {dealSize(r).text !== '—' && <tr><th>Size</th><td>{dealSize(r).text}</td></tr>}
           {offer.map(f => <tr key={f.metric}><th>{f.label ?? f.metric.replace(/_/g, ' ')}</th><td>{typeof f.value === 'boolean' ? (f.value ? 'Yes' : 'No') : fmtFact(f)}</td></tr>)}
           {o?.intermediaries?.registrar && <tr><th>Registrar</th><td>{clean(o.intermediaries.registrar)}</td></tr>}
-        </tbody></table>
+        </tbody></table></>}
         {!!brlms(r).filter(c => c.email).length && <p className="ex-small">Deal-team contacts: {brlms(r).filter(c => c.email).slice(0, 4).map(c => `${clean(c.name)} — ${c.email}`).join(' · ')}</p>}
       </section>
 
@@ -145,6 +145,7 @@ function Dossier({ r, n }: { r: CompanyRecord; n: number }) {
                     <tr key={x.key}><th>{x.label}{x.calc ? ' †' : ''}<div className="ex-hint">{x.hint}</div></th>{periods.map((p, i) => <td key={p} className="r">{fmtFin(x.values[i], x.unit)}</td>)}</tr>))}</tbody></table>
               </div>))}
             <p className="ex-small">Brackets mean a negative number or cash going out. * part-year period. † worked out by the terminal: {[...new Set(m.rows.filter(x => x.calc).map(x => `${x.label.replace(/ \(.*\)/, '')} = ${x.calc}`))].join('; ') || 'none'}. Everything else is as printed in the offer document.</p>
+            {m.notes.map((t, i) => <p key={i} className="ex-small">{t}</p>)}
             {fyP.length >= 2 && <><h3>Revenue and profit</h3><Bars periods={fyP} series={[{ name: 'Revenue from operations', values: rev }, { name: 'Profit after tax', values: pat }]} /><Legend names={['Revenue from operations', 'Profit after tax']} /></>}
             {cf.some(c => c.v.some(x => x != null)) && <>
               <h3>Where the cash came from and went</h3>
@@ -156,7 +157,7 @@ function Dossier({ r, n }: { r: CompanyRecord; n: number }) {
         ) : <p className="ex-empty">The offer document is still being read — restated financials will appear in the next edition.</p>}
       </section>
 
-      <section className="ex-page">
+      {(industry.length > 0 || claims.length > 0 || peers.length > 0) && <section className="ex-page">
         <div className="ex-ph"><div className="ex-ph-n">{n}</div><div><div className="ex-dossier-title">{clean(r.company.name)} — the market</div></div></div>
         {industry.length ? industry.map(({ s, c, g, h }, i) => (
           <figure key={i} className="ex-fig">
@@ -171,7 +172,7 @@ function Dossier({ r, n }: { r: CompanyRecord; n: number }) {
           <table className="ex-table ex-fin"><thead><tr><th>Peer</th><th className="r">P/E</th><th className="r">P/B</th><th className="r">RoNW %</th></tr></thead>
             <tbody>{peers.map(p => <tr key={p.name}><th>{clean(p.name.replace(/\s*\((consolidated|standalone)[^)]*\)/i, ''))}</th><td className="r">{(p.live?.pe ?? p.pe) != null ? (p.live?.pe ?? p.pe)!.toFixed(1) : '—'}</td><td className="r">{(p.live?.pb ?? p.pb) != null ? (p.live?.pb ?? p.pb)!.toFixed(2) : '—'}</td><td className="r">{p.ronw != null ? p.ronw.toFixed(1) : '—'}</td></tr>)}</tbody></table>
         </>}
-      </section>
+      </section>}
     </>
   )
 }
@@ -179,7 +180,7 @@ function Dossier({ r, n }: { r: CompanyRecord; n: number }) {
 export default function ExecutivePrint() {
   const v = useVault()
   const filed = useMemo(() => v.companies
-    .filter(r => r.company.lifecycle !== 'WITHDRAWN' && !r.company.is_sample && !r.custom)
+    .filter(r => r.company.lifecycle !== 'WITHDRAWN' && !r.company.is_sample && !r.custom && isLiveDrhp(r))
     .filter(r => { const f = filedOn(r); return !!f && daysUntil(f) <= 0 && daysUntil(f) >= -1 })
     .sort((a, b) => filedOn(b)!.localeCompare(filedOn(a)!) || (fv(dealSize(b).f) ?? 0) - (fv(dealSize(a).f) ?? 0)), [v])
   const news = useMemo(() => {

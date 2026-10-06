@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.2 — Executive Print makes sense
+- Business overview: disclaimers, definitions and non-GAAP notes are no longer mistaken for the company description; every stored overview is re-checked against the saved page text on each run (no PDF re-download), and a bad one is replaced or hidden
+- Financials: years that have not ended (FY2027+ in October 2026) and empty columns are dropped; identical balance-sheet columns (a misread) are left out with a note
+- "New DRHP" means a company still at the DRHP / SEBI-approval stage with no RHP, prospectus or listing — an exchange page showing a fresh date for an old filing no longer puts a listed company in the Print, Anchor Desk or Home
+- The Print leaves out empty strips, empty tables and empty pages instead of showing dashes
+
 ## 0.10.1 — listed means listed
 - A company found on an exchange's daily file (NSE equity list for any listing date; BSE bhavcopy for BSE-only issues with an RHP or prospectus) is marked Listed instead of staying at "RHP filed" with its old offer-document data
 - Tracked or held listed companies show a "Latest data (NSE)" card (price, 52-week range, P/E, latest quarterly results) above the offer-document financials; announcements feed their news

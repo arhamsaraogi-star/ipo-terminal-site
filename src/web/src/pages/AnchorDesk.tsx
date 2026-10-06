@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { AnchorScorecard, TimelineCard } from '../components/Insights'
 import { useVault, go } from '../App'
 import { Card, FactValue, Kpi, PageHead, Pill, Seg, Stage, Table } from '../components/ui'
-import { eventDate, ipo } from '../lib/derive'
+import { eventDate, ipo, isLiveDrhp } from '../lib/derive'
 import { crore, daysUntil, fmtDate, fv, shares } from '../lib/format'
 import type { CompanyRecord } from '../lib/types'
 
@@ -54,7 +54,7 @@ export default function AnchorDesk() {
   const pool = useMemo(() => v.companies.filter(r => (seg === 'ALL' || r.company.segment === seg)
     && (!bank || brlms(r).some(b => b.name === bank) || (ipo(r)?.intermediaries?.brlms ?? []).includes(bank))), [v, seg, bank])
 
-  const fresh = pool.filter(r => { const d = filedOn(r); return d && -daysUntil(d) <= Number(win) && r.company.lifecycle !== 'WITHDRAWN' })
+  const fresh = pool.filter(r => { const d = filedOn(r); return d && -daysUntil(d) <= Number(win) && r.company.lifecycle !== 'WITHDRAWN' && isLiveDrhp(r) })
     .sort((a, b) => filedOn(b)!.localeCompare(filedOn(a)!))
   const today = fresh.filter(r => daysUntil(filedOn(r)!) === 0)
   const approved = pool.filter(r => (r.company.drhp_status ?? '').toLowerCase() === 'approved' && ['DRHP_FILED', 'SEBI_OBSERVED'].includes(r.company.lifecycle))

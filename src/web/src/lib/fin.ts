@@ -1,17 +1,31 @@
 // Plain-English financial model for a company: reported rows where the offer document gives them, calculated rows (marked)
 // where it does not. Used by the Executive Print; every calculated number says how it was derived.
 import { finTable, isStub } from './derive'
-import { fv } from './format'
+import { fv, isoToday } from './format'
 import type { CompanyRecord } from './types'
 
 export type FinUnit = 'cr' | 'pct' | 'x' | 'rs'
 export interface FinRow { key: string; label: string; hint: string; unit: FinUnit; values: (number | null)[]; calc?: string; group: string }
-export interface FinModel { periods: string[]; rows: FinRow[]; row: (k: string) => FinRow | undefined; lastFy: number; prevFy: number }
+export interface FinModel { periods: string[]; notes: string[]; rows: FinRow[]; row: (k: string) => FinRow | undefined; lastFy: number; prevFy: number }
 
 const TAX = 0.2517   // new-regime corporate tax rate, used only for the estimated FCFF
 
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
+/** Last day of a reporting period label: FY2026 → 2026-03-31, Sep-2026 → 2026-09-30. Null when the label is not understood. */
+export function periodEnd(p: string): string | null {
+  const fy = p.match(/^FY(\d{4})$/)
+  if (fy) return `${fy[1]}-03-31`
+  const m = p.match(/^([A-Za-z]{3})-(\d{4})$/)
+  const mi = m ? MONTHS.indexOf(m[1].toLowerCase()) : -1
+  if (!m || mi < 0) return null
+  return new Date(Date.UTC(+m[2], mi + 1, 0)).toISOString().slice(0, 10)
+}
+
 export function finModel(r: CompanyRecord): FinModel {
-  const { periods, byMetric } = finTable(r)
+  const { periods: allPeriods, byMetric } = finTable(r)
+  // a year that has not ended cannot have restated results: drop forecast / empty columns (FY2027 in October 2026)
+  const today = isoToday()
+  const periods = allPeriods.filter(p => { const e = periodEnd(p); return !e || e <= today })
   const get = (m: string) => periods.map(p => fv(byMetric.get(m)?.get(p)))
   const has = (a: (number | null)[]) => a.some(x => x != null)
   const div = (a: (number | null)[], b: (number | null)[], mult = 1) => a.map((x, i) => (x != null && b[i] ? (x / b[i]!) * mult : null))
@@ -22,6 +36,13 @@ export function finModel(r: CompanyRecord): FinModel {
   const fy = periods.map(p => !isStub(p))
   const rev = get('revenue_from_operations'), ebitda = get('ebitda'), pat = get('pat'), pbt = get('pbt'), nw = get('net_worth')
   const borrow = get('total_borrowings'), cash = get('cash_and_equivalents'), ta = get('total_assets'), cl = get('current_liabilities')
+  // identical balance-sheet figures in two different periods mean the document's columns were mis-read: show neither
+  const bs = [nw, borrow, cash, ta, cl]
+  const notes: string[] = []
+  for (let i = 1; i < periods.length; i++) {
+    const same = bs.filter(a => a[i] != null && a[i] === a[i - 1]).length
+    if (same >= 3) { for (const a of bs) { a[i] = null; a[i - 1] = null }; notes.push(`Balance-sheet figures for ${periods[i - 1]} and ${periods[i]} are left out: the document gave identical numbers for both, so one was misread.`) }
+  }
   const fin = get('finance_cost'), cfo = get('cfo'), cfi = get('cfi'), cff = get('cff'), capex = get('capex').map(x => (x == null ? null : Math.abs(x)))
 
   // growth: only between consecutive full years
@@ -71,13 +92,13 @@ export function finModel(r: CompanyRecord): FinModel {
   add('net', 'Net change in cash', 'CFO + CFI + CFF', 'cr', cfo.map((x, i) => (x != null && cfi[i] != null && cff[i] != null ? x + cfi[i]! + cff[i]! : null)), 'Cash flow', 'CFO + CFI + CFF')
 
   const idx = (k: number) => [...periods.keys()].filter(i => fy[i]).slice(-k)[0] ?? -1
-  return { periods, rows, row: k => rows.find(x => x.key === k), lastFy: idx(1), prevFy: idx(2) }
+  return { periods, notes, rows, row: k => rows.find(x => x.key === k), lastFy: idx(1), prevFy: idx(2) }
 }
 
 export const fmtFin = (v: number | null | undefined, u: FinUnit): string => {
   if (v == null || !isFinite(v)) return '—'
   const neg = v < 0, a = Math.abs(v)
   const body = u === 'pct' ? `${a.toFixed(1)}%` : u === 'x' ? `${a.toFixed(2)}x` : u === 'rs' ? `₹${a.toFixed(2)}`
-    : a.toLocaleString('en-IN', { maximumFractionDigits: a < 100 ? 1 : 0 })
+    : a.toLocaleString('en-IN', { minimumFractionDigits: a < 100 ? 1 : 0, maximumFractionDigits: a < 100 ? 1 : 0 })
   return neg ? `(${body})` : body
 }

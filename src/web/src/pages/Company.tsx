@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { screenerUrl } from '../lib/portfolio'
+import { goodOverview } from '../lib/overview'
 import { finModel, fmtFin } from '../lib/fin'
 import { Area, AreaChart, Bar, CartesianGrid, ComposedChart, Legend, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { usePf, useVault } from '../App'
@@ -202,7 +203,7 @@ function Overview({ r }: { r: CompanyRecord }) {
   const upcoming = r.events.filter(e => daysUntil(e.date) >= 0).slice(0, 6)
   return (
     <div className="space-y-5">
-      {r.company.overview?.summary && (
+      {goodOverview(r.company.overview?.summary) && (
         <Card title="About the company" solid>
           <ReadMore text={r.company.overview.summary} />
           {r.company.overview.source && <p className="muted text-xs mt-2">From the offer document's “Our Business — Overview” · <SourceLine s={r.company.overview.source} /></p>}

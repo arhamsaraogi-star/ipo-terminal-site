@@ -194,3 +194,25 @@ def test_bse_only_issue_found_on_bhavcopy_is_marked_listed(monkeypatch):
     R.update_market(st, None)
     assert b.company["company_id"] in seen
     assert b.company["identifiers"]["bse_code"] == "543999" and b.company["exchange_listed"] == "BSE" and b.company["lifecycle"] == "LISTED"
+
+
+def test_bad_stored_overview_is_rederived_from_saved_page_text(tmp_path, monkeypatch):
+    import gzip
+    from pipeline.ingestion import run as R
+    monkeypatch.setattr(R, "DATA", tmp_path)
+    monkeypatch.setattr(R, "company_dirs", lambda *a, **k: iter(()))
+    st = R.State(True)
+    b = st.company("Yash Highvoltage Limited", segment="SME", source="BSE-SME")
+    sha = "ab" * 32
+    d = R.upsert_doc(b, "PROSPECTUS", "https://x/p.pdf", "2024-12-20", "BSE")
+    d["sha256"] = sha
+    tdir = tmp_path / "text" / sha[:16]
+    tdir.mkdir(parents=True)
+    pages = ["cover"] * 12 + ["OUR BUSINESS\n\nWe have included certain non-GAAP financial measures and other performance indicators relating to our financial performance in this Draft Red Herring Prospectus supplemental measures Ind AS IFRS.",
+             "OUR BUSINESS\n\nOverview\n\nYash Highvoltage Limited is engaged in the manufacturing and distribution of transformer bushings, including oil impregnated paper condenser bushings and high current bushings, and provides repair services."]
+    for i, t in enumerate(pages, 1):
+        (tdir / f"p{i:03d}.txt.gz").write_bytes(gzip.compress(t.encode()))
+    b.company["overview"] = {"summary": "We have included certain non-GAAP financial measures and other performance indicators relating to our financial performance in this Draft Red Herring Prospectus.", "source": None}
+    assert R.refresh_overviews(st) == 1
+    assert b.company["overview"]["summary"].startswith("Yash Highvoltage Limited is engaged")
+    assert R.refresh_overviews(st) == 0       # a good overview is left alone

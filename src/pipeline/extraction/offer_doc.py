@@ -589,12 +589,16 @@ def extract(pdf: bytes) -> Result:
 
 
 # ───────────────────────── company overview (Our Business → first substantive paragraphs) ─────────────────────────
-BUS_RE = re.compile(r"^\s*(?:OUR\s+BUSINESS|BUSINESS\s+OVERVIEW|OUR\s+BUSINESS\s+OVERVIEW)\s*$", re.M)
+BUS_RE = re.compile(r"^\s*(?:OUR\s+BUSINESS|BUSINESS\s+OVERVIEW|OUR\s+BUSINESS\s+OVERVIEW|OVERVIEW)\s*$", re.M | re.I)
 BOILER = re.compile(r"forward[- ]looking|should be read|qualified in its entirety|Restated Financial|references to .{0,20}\b(we|us|our)\b|"
                     r"Unless (?:the context|otherwise)|Risk Factors|industry (?:and market )?data|commissioned|paid for by|"
-                    r"financial year ends|derived from|page \d+", re.I)
-
-
+                    r"financial year ends|derived from|page \d+|non-?GAAP|\bInd ?AS\b|\bIFRS\b|\bGAAP\b|supplemental measures|performance indicators|"
+                    r"this (?:Draft )?(?:Red Herring )?Prospectus|presentation of (?:financial|industry)|rounded off|\bcrore\b.{0,30}\blakh\b|"
+                    r"Certain Conventions|Definitions? and Abbreviations|table of contents", re.I)
+# a real business description says what the company is or does early on
+BUSINESS_SIGNAL = re.compile(r"\b(we are|we have been|we operate|we manufacture|we provide|we offer|we design|we engage|is engaged in|are engaged in|"
+                             r"is (?:a|an|one of|among|the)\b|are (?:a|an|one of|among|the)\b|is a .{0,40}company|incorporated in \d{4}|"
+                             r"business of|manufactur\w+|provid\w+ (?:services|solutions)|leading|largest)", re.I)
 def _paras(text: str) -> list[str]:
     out, para = [], []
     for line in text.splitlines():
@@ -615,10 +619,28 @@ def _paras(text: str) -> list[str]:
     return out
 
 
-def scan_overview(pages_text: list[str], max_chars: int = 1400) -> tuple[str | None, int | None]:
-    """The company's own description: first non-boilerplate paragraphs of the Our Business chapter (source tags removed)."""
-    starts = [i for i, t in enumerate(pages_text) if i > 10 and BUS_RE.search(t)]
-    for s0 in starts[:3]:
+def _clean_overview(picked: list[str], max_chars: int) -> str:
+    txt = " ".join(picked)
+    txt = re.sub(r"\s*[(\[](?:Source|Sources?)\s*:[^)\]]*[)\]]\.?", "", txt)
+    txt = re.sub(r"(\w)- (\w)", r"\1\2", txt)
+    txt = re.sub(r"\s+", " ", txt).strip()
+    if len(txt) > max_chars:
+        cut = txt[:max_chars]
+        txt = cut[:cut.rfind(". ") + 1] if ". " in cut else cut + "…"
+    return txt
+
+
+def good_overview(txt: str) -> bool:
+    """True when the text reads like the company describing its own business (not definitions, disclaimers or measures)."""
+    head = txt[:500]
+    return len(txt) >= 120 and not BOILER.search(head) and bool(BUSINESS_SIGNAL.search(head))
+
+
+def scan_overview(pages_text: list[str], max_chars: int = 1800) -> tuple[str | None, int | None]:
+    """The company's own description: first business paragraphs of the Our Business chapter. Every page carrying the heading is a
+    candidate (running headers repeat it); a candidate is accepted only if it reads like a business description."""
+    starts = [i for i, t in enumerate(pages_text) if i > 10 and BUS_RE.search(t) and not re.search(r"\.{5,}|…{3,}", t[:800])]
+    for s0 in starts[:25]:
         text = "\n".join(pages_text[s0:s0 + 3])
         m = BUS_RE.search(text)
         paras = _paras(text[m.end():] if m else text)
@@ -635,15 +657,9 @@ def scan_overview(pages_text: list[str], max_chars: int = 1400) -> tuple[str | N
             picked.append(p_)
             if len(" ".join(picked)) > max_chars:
                 break
-        txt = " ".join(picked)
-        txt = re.sub(r"\s*[(\[](?:Source|Sources?)\s*:[^)\]]*[)\]]\.?", "", txt)
-        txt = re.sub(r"(\w)- (\w)", r"\1\2", txt)
-        txt = re.sub(r"\s+", " ", txt).strip()
-        if len(txt) < 120:
+        txt = _clean_overview(picked, max_chars)
+        if not good_overview(txt):
             continue
-        if len(txt) > max_chars:
-            cut = txt[:max_chars]
-            txt = cut[:cut.rfind(". ") + 1] if ". " in cut else cut + "…"
         page = next((k + 1 for k in range(s0, min(s0 + 3, len(pages_text))) if picked and picked[0][:40] in " ".join(pages_text[k].split())), s0 + 1)
         return txt, page
     return None, None
