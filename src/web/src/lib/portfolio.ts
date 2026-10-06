@@ -1,8 +1,9 @@
 // Holdings, tracked companies and your own private companies live in this browser (the public repo never sees them).
 // Export / import moves them between devices.
+import type { ScreenerImport } from './screener'
 import type { CompanyRecord, Holding, ListedData, ListedPick, ListedRow, PrivateCo, Track, TrackStatus } from './types'
 
-export interface Pf { holdings: Holding[]; watchlist: string[]; tracking: Track[]; privates: PrivateCo[]; listed?: ListedPick[]; deleted?: string[] }
+export interface Pf { holdings: Holding[]; watchlist: string[]; tracking: Track[]; privates: PrivateCo[]; listed?: ListedPick[]; imports?: ScreenerImport[]; deleted?: string[] }
 const KEY = 'ipo-terminal:portfolio:v1'
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -16,19 +17,20 @@ function normalise(p: Partial<Pf>): Pf {
   }
   const privates = Array.isArray(p.privates) ? p.privates.filter(x => x && x.company_id && x.name).map(x => ({ ...x, rounds: Array.isArray(x.rounds) ? x.rounds : [] })) : []
   const listed = Array.isArray(p.listed) ? p.listed.filter(x => x && x.company_id && x.symbol && x.name) : []
-  return { holdings, watchlist: [], tracking, privates, listed, deleted: Array.isArray(p.deleted) ? p.deleted.filter(x => typeof x === 'string') : [] }
+  const imports = Array.isArray(p.imports) ? p.imports.filter(x => x && x.company_id && Array.isArray(x.facts)) : []
+  return { holdings, watchlist: [], tracking, privates, listed, imports, deleted: Array.isArray(p.deleted) ? p.deleted.filter(x => typeof x === 'string') : [] }
 }
 
 /** Record deletions as tombstones (so a sync merge never resurrects them) and clear tombstones for re-added items. */
 export function withTombstones(prev: Pf, next: Pf): Pf {
-  const ids = (p: Pf) => new Set([...p.holdings.map(x => `h:${x.company_id}`), ...p.tracking.map(x => `t:${x.company_id}`), ...p.privates.map(x => `p:${x.company_id}`), ...(p.listed ?? []).map(x => `l:${x.company_id}`)])
+  const ids = (p: Pf) => new Set([...p.holdings.map(x => `h:${x.company_id}`), ...p.tracking.map(x => `t:${x.company_id}`), ...p.privates.map(x => `p:${x.company_id}`), ...(p.listed ?? []).map(x => `l:${x.company_id}`), ...(p.imports ?? []).map(x => `i:${x.company_id}`)])
   const a = ids(prev), b = ids(next)
   const del = new Set(next.deleted ?? prev.deleted ?? [])
   for (const k of a) if (!b.has(k)) del.add(k)
   for (const k of b) del.delete(k)
   return { ...next, deleted: [...del].slice(-500) }
 }
-export const isEmpty = (p: Pf) => !p.holdings.length && !p.tracking.length && !p.privates.length && !(p.listed ?? []).length
+export const isEmpty = (p: Pf) => !p.holdings.length && !p.tracking.length && !p.privates.length && !(p.listed ?? []).length && !(p.imports ?? []).length
 
 const key = (uid?: string) => (uid ? `ipo-terminal:pf:${uid}` : KEY)
 export function loadPf(uid?: string): Pf {
@@ -92,6 +94,13 @@ export function privateRecord(p: PrivateCo): CompanyRecord {
     offerings: [], facts: null, documents: [], lockins: [], news: [], market: null,
     events: [], custom: { ...p, rounds },
   }
+}
+
+/** Apply an uploaded Screener export to a company record: its financials become the export's (latest) numbers. */
+export function withImport(r: CompanyRecord, imp?: ScreenerImport | null): CompanyRecord {
+  if (!imp) return r
+  return { ...r, facts: { ...(r.facts ?? { financials: [], industry: [] }), financials: imp.facts, source_document: null },
+    imported: { imported_at: imp.imported_at, source: 'Screener export (uploaded)', quarters: imp.quarters } }
 }
 
 // ───────── already-listed companies pulled in by search ─────────

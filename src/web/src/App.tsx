@@ -19,7 +19,7 @@ import AnchorDesk from './pages/AnchorDesk'
 import ExecutivePrint from './pages/ExecutivePrint'
 import { NewPrivatePage } from './pages/PrivateCo'
 import ListedCompany from './pages/ListedCompany'
-import { listedRecord, privateRecord, loadPf, savePf, takeLegacy, withTombstones, normalisePf, type Pf } from './lib/portfolio'
+import { listedRecord, withImport, privateRecord, loadPf, savePf, takeLegacy, withTombstones, normalisePf, type Pf } from './lib/portfolio'
 
 // ───────── data context ─────────
 const Ctx = createContext<Vault | null>(null)
@@ -137,9 +137,10 @@ export default function App() {
     const rd = vault.redirects ?? {}
     const fix = (id: string) => rd[id] ?? id
     const tracking = pf.tracking.map(t => ({ ...t, company_id: fix(t.company_id) }))
+    const imps = new Map((pf.imports ?? []).map(x => [fix(x.company_id), x]))
     return {
-      ...vault, companies: [...vault.companies.map(c => { const d = c.company.identifiers.nse_symbol ? vault.listed_data?.[c.company.identifiers.nse_symbol] : null; return d ? { ...c, listed: d } : c }), ...pf.privates.map(privateRecord),
-        ...(pf.listed ?? []).filter(l => !vault.companies.some(c => c.company.identifiers.nse_symbol === l.symbol)).map(l => listedRecord(l, vault.listed_index?.find(r => r[0] === l.symbol), vault.meta.built_at.slice(0, 10), vault.listed_data?.[l.symbol]))],
+      ...vault, companies: [...vault.companies.map(c => { const d = c.company.identifiers.nse_symbol ? vault.listed_data?.[c.company.identifiers.nse_symbol] : null; return withImport(d ? { ...c, listed: d } : c, imps.get(c.company.company_id)) }), ...pf.privates.map(privateRecord),
+        ...(pf.listed ?? []).filter(l => !vault.companies.some(c => c.company.identifiers.nse_symbol === l.symbol)).map(l => withImport(listedRecord(l, vault.listed_index?.find(r => r[0] === l.symbol), vault.meta.built_at.slice(0, 10), vault.listed_data?.[l.symbol]), imps.get(l.company_id)))],
       portfolio: { holdings: pf.holdings.map(h => ({ ...h, company_id: fix(h.company_id) })), tracking, privates: pf.privates,
         watchlist: tracking.filter(t => t.status !== 'PASSED').map(t => t.company_id) },
     }

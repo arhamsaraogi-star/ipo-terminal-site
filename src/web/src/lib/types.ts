@@ -82,6 +82,7 @@ export interface CompanyRecord {
   documents: Doc[]; events: Event[]; lockins: Lockin[]; news: News[]; market?: Market | null
   custom?: PrivateCo
   listed?: ListedData | null   // already-listed company followed by search: profile, results, announcements
+  imported?: { imported_at: string; source: string; quarters: { period_end: string; income: number | null; pat: number | null; eps: number | null }[] } | null
 }
 /** [symbol, name, isin, segment, close, mcap_cr, listed_on] — search-only universe of NSE-listed companies. */
 export interface ListedData {

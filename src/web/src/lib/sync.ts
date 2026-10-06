@@ -77,6 +77,11 @@ export function merge(prefer: Pf, other: Pf): Pf {
     tracking: by(prefer.tracking, other.tracking).filter(keep('t')),
     privates: by(prefer.privates, other.privates).filter(keep('p')),
     listed: by(prefer.listed ?? [], other.listed ?? []).filter(keep('l')),
+    imports: [...(prefer.imports ?? []), ...(other.imports ?? [])].reduce<NonNullable<Pf['imports']>>((acc, x) => {
+      const i = acc.findIndex(y => y.company_id === x.company_id)
+      if (i < 0) acc.push(x); else if (x.imported_at > acc[i].imported_at) acc[i] = x
+      return acc
+    }, []).filter(keep('i')),
     watchlist: [], deleted: [...deleted].slice(-500),
   }
 }

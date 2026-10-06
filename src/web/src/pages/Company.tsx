@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { screenerUrl } from '../lib/portfolio'
+import { parseScreener } from '../lib/screener'
 import { goodOverview } from '../lib/overview'
 import { finModel, fmtFin } from '../lib/fin'
 import { Area, AreaChart, Bar, CartesianGrid, ComposedChart, Legend, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
@@ -168,16 +169,62 @@ function ReadMore({ text }: { text: string }) {
     {text.length > 320 && <button className="text-sm mt-1" style={{ color: 'var(--accent)' }} onClick={() => setOpen(o => !o)}>{open ? 'Show less' : 'Read more'}</button>}</div>
 }
 
+/** Latest financials for a listed company: import the Excel file Screener (Pro) exports. Stays in your account, synced across devices. */
+function ScreenerImportCard({ r }: { r: CompanyRecord }) {
+  const { pf, setPf } = usePf()
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const id = r.company.company_id
+  const sym = r.company.identifiers.nse_symbol
+  if (r.custom || r.company.lifecycle !== 'LISTED') return null
+  const pick = async (f?: File | null) => {
+    if (!f) return
+    setBusy(true); setErr('')
+    try {
+      const imp = parseScreener(await f.arrayBuffer(), id)
+      setPf({ ...pf, imports: [...(pf.imports ?? []).filter(x => x.company_id !== id), imp] })
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+  const periods = r.imported ? [...new Set((r.facts?.financials ?? []).map(f => f.period).filter(Boolean) as string[])].sort() : []
+  return (
+    <Card title="Latest financials" solid>
+      {r.imported ? (
+        <>
+          <p className="ink2">Annual numbers below come from your Screener export{periods.length ? ` (${periods[0]}–${periods[periods.length - 1]})` : ''}, imported {fmtDate(r.imported.imported_at.slice(0, 10))}. Re-import any time to refresh.</p>
+          {!!r.imported.quarters.length && (
+            <Table rows={r.imported.quarters.slice(0, 8)} cols={[
+              { key: 'p', label: 'Quarter ended', render: x => <b>{fmtDate(x.period_end)}</b> },
+              { key: 'i', label: 'Sales (₹ cr)', right: true, render: x => (x.income != null ? num(x.income, 1) : '—') },
+              { key: 'a', label: 'Net profit (₹ cr)', right: true, render: x => (x.pat != null ? num(x.pat, 1) : '—') },
+            ]} />)}
+        </>
+      ) : (
+        <ol className="ink2 text-[15px] space-y-1 list-decimal pl-5">
+          <li>Open this company on Screener{sym ? <> — <a href={screenerUrl(sym)} target="_blank" rel="noreferrer">screener.in/company/{sym} ↗</a></> : ''} while signed in to your Pro account.</li>
+          <li>Click <b>Export to Excel</b> and save the file.</li>
+          <li>Choose that file below. Annual P&amp;L, balance sheet, cash flow (CFO / CFI / CFF) and the latest quarters replace the old IPO-time figures everywhere in the terminal.</li>
+        </ol>)}
+      <div className="flex gap-2 flex-wrap items-center mt-3">
+        <label className="btn btn-primary" style={{ cursor: 'pointer' }}>{busy ? 'Reading…' : r.imported ? 'Replace Screener file' : 'Import Screener Excel'}
+          <input type="file" accept=".xlsx" hidden onChange={e => { void pick(e.target.files?.[0]); e.target.value = '' }} /></label>
+        {r.imported && <button className="btn" onClick={() => setPf({ ...pf, imports: (pf.imports ?? []).filter(x => x.company_id !== id) })}>Remove</button>}
+      </div>
+      {err && <p className="neg text-sm mt-2">{err}</p>}
+      <p className="muted text-xs mt-3">Screener's export is for your own use under your Pro subscription; the file is read in your browser and kept only in your encrypted account.</p>
+    </Card>
+  )
+}
+
 /** A listed company's offer-document numbers are the ones printed for the IPO; say so when they are out of date. */
 function IpoVintageNote({ r }: { r: CompanyRecord }) {
   const fy = latest(r, 'revenue_from_operations')?.period ?? latest(r, 'pat')?.period
   const y = fy ? Number(fy.replace(/\D/g, '')) : null
   const d = new Date(), lastDone = d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1   // FY ending 31 Mar of this year is complete from April
-  if (r.company.lifecycle !== 'LISTED' || r.company.external || !y || y >= lastDone) return null
+  if (r.company.lifecycle !== 'LISTED' || r.company.external || r.imported || !y || y >= lastDone) return null
   return (
     <Card solid>
       <p className="ink2">Figures on this page are from the offer document at the IPO ({fy}) — the latest year the document covers, not the company's latest results.
-        {r.listed?.results?.length ? ' Latest quarterly results from NSE are shown above.' : r.company.identifiers.nse_symbol ? ' Track this company to pull its latest results from NSE.' : ' Results since listing are not available from the exchange feeds this terminal can read.'}
+        {' For the latest financials, import your Screener export on the Financials tab'}{r.listed?.results?.length ? '; latest NSE quarterly results are shown above.' : r.company.identifiers.nse_symbol ? ' (or track this company to pull its NSE results).' : '.'}
         {r.company.identifiers.nse_symbol && <> <a href={screenerUrl(r.company.identifiers.nse_symbol)} target="_blank" rel="noreferrer">Open on Screener ↗</a></>}</p>
     </Card>
   )
@@ -251,7 +298,7 @@ function FinancialSnapshot({ r }: { r: CompanyRecord }) {
   if (!rev && !pat) return null
   const margin = em ? fv(em) : fv(ebitda) != null && fv(rev) ? (fv(ebitda)! / fv(rev)!) * 100 : null
   return (
-    <Card title={`${r.company.lifecycle === 'LISTED' && !r.company.external ? 'At the IPO' : 'Financial snapshot'} · ${rev?.period ?? pat?.period ?? ''}`} solid>
+    <Card title={`${r.company.lifecycle === 'LISTED' && !r.company.external && !r.imported ? 'At the IPO' : 'Financial snapshot'} · ${rev?.period ?? pat?.period ?? ''}`} solid>
       <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         <M label="Revenue"><FactValue f={rev} /></M>
         <M label="EBITDA"><FactValue f={ebitda} /></M>
@@ -337,9 +384,8 @@ function CashFlowCard({ r }: { r: CompanyRecord }) {
 }
 
 function Financials({ r }: { r: CompanyRecord }) {
-  if (r.company.external) return <ListedKeyData r={r} />
-  if (r.listed) return <div className="space-y-5"><ListedKeyData r={r} /><FinancialsFiled r={r} /></div>
-  return <FinancialsFiled r={r} />
+  if (r.company.external) return <div className="space-y-5"><ScreenerImportCard r={r} /><ListedKeyData r={r} /></div>
+  return <div className="space-y-5"><ScreenerImportCard r={r} />{r.listed && <ListedKeyData r={r} />}<FinancialsFiled r={r} /></div>
 }
 function FinancialsFiled({ r }: { r: CompanyRecord }) {
   const note = <IpoVintageNote r={r} />
@@ -381,7 +427,7 @@ function FinancialsFiled({ r }: { r: CompanyRecord }) {
           { key: 'm', label: 'Metric', render: ([, l]) => <b>{l}</b> },
           ...periods.map(p => ({ key: p, label: isStub(p) ? `${p} (part-year)` : p, right: true, render: ([m]: [string, string]) => <FactValue f={byMetric.get(m)?.get(p)} /> })),
         ]} />
-        <p className="muted text-xs mt-3">Source: {src ? <a href={src.url} target="_blank" rel="noreferrer">{src.doc_type} · {fmtDate(src.filing_date)}</a> : 'offer document'} — values read from the restated summary financials and KPI tables; each figure links to its page. Values that contradicted the document's own statements were dropped rather than shown.</p>
+        <p className="muted text-xs mt-3">{r.imported ? 'Source: your Screener export (Export to Excel). EBITDA is worked out as profit before tax + interest + depreciation − other income.' : <>Source: {src ? <a href={src.url} target="_blank" rel="noreferrer">{src.doc_type} · {fmtDate(src.filing_date)}</a> : 'offer document'} — values read from the restated summary financials and KPI tables; each figure links to its page. Values that contradicted the document's own statements were dropped rather than shown.</>}</p>
       </Card>
     </div>
   )
