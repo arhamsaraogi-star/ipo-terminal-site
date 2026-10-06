@@ -68,14 +68,14 @@ export default function App() {
     if (!s || !c) return
     setSync({ mode: 'syncing' })
     try {
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 5; i++) {
         const r = await push(c, s, pfRef.current, shaRef.current)
         if (!r.conflict) { shaRef.current = r.sha; dirty.current = false; setSync({ mode: 'ok', at: stamp() }); void writeRequests(); return }
         const { remote, sha } = await pull(c, s)            // someone else saved first: merge, keep everything, retry
         shaRef.current = sha
         if (remote) apply(merge(pfRef.current, normalisePf(remote.pf)))
       }
-      throw new Error('could not save after 3 attempts')
+      throw new Error('sync: another device keeps saving at the same moment — retrying shortly')
     } catch (e) { setSync({ mode: 'error', msg: (e as Error).message }) }
   }
   // Names this user wants web news for: own private companies + tracked + held. Written only when the list changes.
@@ -125,7 +125,7 @@ export default function App() {
       shaRef.current = sha
       const merged = remote ? merge(normalisePf(remote.pf), local) : local
       apply(merged)
-      if (!remote || JSON.stringify(merged) !== JSON.stringify(normalisePf(remote.pf))) await pushNow()
+      if (!remote || JSON.stringify(merged) !== JSON.stringify(normalisePf(remote.pf))) { dirty.current = true; await pushNow() }
       else setSync({ mode: 'ok', at: stamp() })
     } catch (e) { setSync({ mode: 'error', msg: (e as Error).message }) }
   }
@@ -155,7 +155,8 @@ export default function App() {
         }
       } catch { /* offline or mid-deploy: try again next tick */ }
       const s = sessRef.current, c = cfgRef.current
-      if (s && c && !dirty.current) {
+      if (s && c && dirty.current) void pushNow()   // a failed or interrupted save is retried every minute until it lands
+      else if (s && c) {
         try {
           const { remote, sha } = await pull(c, s)
           if (remote && sha !== shaRef.current && !dirty.current) { shaRef.current = sha; apply(normalisePf(remote.pf)) }
@@ -448,14 +449,14 @@ function SignupNote() {
 }
 
 function SyncLine({ sync }: { sync: SyncState }) {
-  const t = { off: ['muted', 'Saved on this device'], syncing: ['muted', 'Syncing…'], ok: ['pos', `Synced across devices${sync.at ? ` · ${sync.at}` : ''}`], error: ['warn', 'Sync issue — saved on this device'] }[sync.mode]
-  return <div className={`text-xs ${t[0]}`} title={sync.msg}>● {t[1]}</div>
+  const t = { off: ['muted', 'Saved on this device'], syncing: ['muted', 'Syncing…'], ok: ['pos', `Synced across devices${sync.at ? ` · ${sync.at}` : ''}`], error: ['warn', 'Sync issue — saved on this device, retrying'] }[sync.mode]
+  return <div className={`text-xs ${t[0]}`} title={sync.msg}>● {t[1]}{sync.mode === 'error' && sync.msg ? <div className="muted">{sync.msg}</div> : null}</div>
 }
 
 function SyncBadge() {
   const { sync, username } = useSync()
   const t = { off: ['muted', 'Sync off — saved on this device'], syncing: ['muted', 'Syncing…'], ok: ['pos', `Synced${sync.at ? ` ${sync.at}` : ''}`], error: ['warn', `Sync issue — saved on this device`] }[sync.mode]
-  return <div className="mt-2"><b className="ink2">{username}</b><br /><span className={t[0]} title={sync.msg}>● {t[1]}</span></div>
+  return <div className="mt-2"><b className="ink2">{username}</b><br /><span className={t[0]} title={sync.msg}>● {t[1]}</span>{sync.mode === 'error' && sync.msg ? <div className="muted text-[11px] leading-snug">{sync.msg}</div> : null}</div>
 }
 
 function TopBar({ onMenu }: { onMenu: () => void }) {

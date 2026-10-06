@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.1 — fixes: lock-in dates, SEBI approvals, coverage, sync
+- Anchor lock-ins are dated from the issue timeline alone (no longer wait for the share count to be read from the offer document); counted the market way, allotment day = day 1 (allotment 4 Aug → 30d ends 2 Sep, 90d ends 1 Nov)
+- SEBI approval: an "Approved" status on the NSE register creates a SEBI-approval event (date first seen), moves the company to "SEBI observed", and shows in a new "SEBI nod" column on the Pipeline
+- Coverage: DRHP window widened from 450 to 900 days and every live register status is kept, so approved filings older than a year are no longer dropped; returned filings are marked withdrawn
+- Sync: unsent changes are retried every minute (before, one failure stalled them), up to 5 conflict retries, files over 1 MB are read via the blob API, and the error now says what happened (401 / 403 / 404 / offline)
+
 ## 0.7.0 — 2026-10-06 · BSE SME documents read, phone layout, anchor intelligence
 - BSE SME filing list read through a page-reader relay when bsesme.com refuses the runner; documents downloaded via the bseindia.com mirror; every document re-read (doc/4), never-read documents first, 6 parallel workers
 - SME cover pages: lead manager / registrar parsed when the name follows the contact details; company summary from SME "Our Business" chapters

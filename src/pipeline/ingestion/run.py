@@ -191,6 +191,9 @@ def upsert_doc(b: CompanyBundle, doc_type: str, url: str, filing_date: str | Non
 
 
 # ───────────────────────── adapters → state ─────────────────────────
+DEAD_STATUS = {"withdrawn", "returned", "lapsed", "rejected", "closed", "expired"}
+
+
 def ingest_offerdocs(st: State, nse: N.NSE, since: date, drhp_since: date | None = None) -> None:
     drhp_since = drhp_since or since
     for index, segment in (("equities", "MAINBOARD"), ("sme", "SME")):
@@ -202,7 +205,10 @@ def ingest_offerdocs(st: State, nse: N.NSE, since: date, drhp_since: date | None
         n = 0
         for r in rows:
             dates = {k: ddate(r.get(k)) for k in ("drhpDate", "rhpDate", "fpDate", "advDate")}
-            live = (r.get("drhpStatus") or "").lower() in ("under process", "approved") and dates["drhpDate"] and dates["drhpDate"] >= drhp_since.isoformat()
+            # Any filing still alive on the register stays in the pipeline (SEBI approval is valid for 12 months, so an
+            # approved DRHP can be well over a year old); only dead statuses need a recent date to qualify.
+            status = (r.get("drhpStatus") or "").strip().lower()
+            live = status not in DEAD_STATUS and bool(dates["drhpDate"]) and dates["drhpDate"] >= drhp_since.isoformat()
             if not live and not any(d and d >= since.isoformat() for d in dates.values()):
                 continue
             name = (r.get("company") or "").strip()
@@ -223,8 +229,12 @@ def ingest_offerdocs(st: State, nse: N.NSE, since: date, drhp_since: date | None
                            size=r.get(key + "FileSize"))
                 if etype:
                     upsert_event(b, etype, d, "actual", src(label if label != "ADVERTISEMENT" else "EXCHANGE_ANNOUNCEMENT", url))
-            if (r.get("drhpStatus") or "").lower() == "withdrawn":
+            if status in ("withdrawn", "returned"):
                 b.company["lifecycle"] = "WITHDRAWN"
+            if status == "approved" and not any(e["event_type"] == "SEBI_OBSERVATION" for e in b.events):
+                # The register publishes the status but not the observation date, so record the day we first saw it.
+                upsert_event(b, "SEBI_OBSERVATION", TODAY.isoformat(), "actual", src("EXCHANGE_ANNOUNCEMENT", reg),
+                             detail="SEBI approval (observation letter) — status 'Approved' on the NSE offer-document register; date = first seen")
             n += 1
         st.log.append(f"NSE offer-document register ({index}): {n} companies in window")
 
@@ -636,7 +646,7 @@ def lifecycle(b: CompanyBundle) -> str:
         return "ISSUE_ANNOUNCED"
     if "RHP_FILED" in ev or "PROSPECTUS_FILED" in ev:
         return "RHP_FILED"
-    if (b.company.get("drhp_status") or "").lower() == "approved":
+    if (b.company.get("drhp_status") or "").lower() == "approved" or "SEBI_OBSERVATION" in ev:
         return "SEBI_OBSERVED"
     if "DRHP_FILED" in ev or "UDRHP_FILED" in ev:
         return "DRHP_FILED"
@@ -703,7 +713,7 @@ def remove_samples() -> int:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=365, help="window for issues / RHP / prospectus")
-    ap.add_argument("--drhp-days", type=int, default=450, help="window for DRHPs still in the pipeline")
+    ap.add_argument("--drhp-days", type=int, default=900, help="window for DRHPs still in the pipeline")
     ap.add_argument("--backfill", action="store_true")
     ap.add_argument("--detail-budget", type=int, default=250)
     ap.add_argument("--pdf-budget", type=int, default=400)

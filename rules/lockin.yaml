@@ -1,6 +1,9 @@
 # SEBI ICDR lock-in rules, versioned by segment and effective date.
 # The engine selects the rule version in force on the ISSUE OPENING DATE.
 # Lock-in periods run from the DATE OF ALLOTMENT.
+# count_allotment_day: true  → the allotment day is day 1 of a day-count period, so expiry (the LAST locked day) is
+#   allotment + (days - 1). This matches how NSE / BSE and the market quote anchor lock-ins
+#   (allotment 4 Aug → 30 days ends 2 Sep, 90 days ends 1 Nov); shares trade from the next business day.
 #
 # verified: false  → the period has NOT yet been checked against the current regulation text.
 # The terminal shows an "unverified rule" badge on every tranche derived from an unverified rule.
@@ -13,6 +16,7 @@ rules:
     holder_category: ANCHOR
     effective_from: 2023-04-01
     effective_to: null
+    count_allotment_day: true
     tranches:
       - { share_of_holding: 0.5, period_days: 30 }
       - { share_of_holding: 0.5, period_days: 90 }
@@ -24,6 +28,7 @@ rules:
     holder_category: ANCHOR
     effective_from: 2018-09-11
     effective_to: 2023-03-31
+    count_allotment_day: true
     tranches:
       - { share_of_holding: 1.0, period_days: 30 }
     reference: "ICDR 2018 Schedule XIII — anchor lock-in 30 days"

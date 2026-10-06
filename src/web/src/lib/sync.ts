@@ -24,25 +24,44 @@ async function ensureBranch(cfg: SyncCfg) {
   const repo = await (await gh(cfg, '')).json()
   const base = await (await gh(cfg, `/git/ref/heads/${repo.default_branch ?? 'main'}`)).json()
   const c = await gh(cfg, '/git/refs', { method: 'POST', body: JSON.stringify({ ref: `refs/heads/${cfg.branch}`, sha: base.object.sha }) })
-  if (!c.ok && c.status !== 422) throw new Error(`sync: cannot create branch (${c.status})`)
+  if (!c.ok && c.status !== 422) throw explain(c.status, 'branch setup')
+}
+
+/** Say what went wrong in words the user (and the admin) can act on. */
+export function explain(status: number, what: string): Error {
+  const hint = status === 401 ? 'the sync token was rejected — renew the SYNC_TOKEN secret and re-run Refresh'
+    : status === 403 ? 'GitHub refused (token lacks Contents: read & write on this repo, or rate-limited — retrying)'
+    : status === 404 ? 'repository or sync branch not found for this token'
+    : status === 0 ? 'offline or blocked — retrying' : 'GitHub error — retrying'
+  return new Error(`sync ${what} failed (${status || 'network'}): ${hint}`)
 }
 
 /** Pull the latest copy. Returns null if this user has never synced. */
 export async function pull(cfg: SyncCfg, s: Session): Promise<{ remote: Remote | null; sha: string | null }> {
-  const r = await gh(cfg, `/contents/users/${s.uid}.bin?ref=${cfg.branch}`)
+  let r: Response
+  try { r = await gh(cfg, `/contents/users/${s.uid}.bin?ref=${cfg.branch}&t=${Date.now()}`) } catch { throw explain(0, 'pull') }
   if (r.status === 404) return { remote: null, sha: null }
-  if (!r.ok) throw new Error(`sync: pull failed (${r.status})`)
+  if (!r.ok) throw explain(r.status, 'pull')
   const j = await r.json()
-  return { remote: await openUser<Remote>(s, unb64(j.content)), sha: j.sha }
+  let content: string = j.content
+  if (!content) {                                   // the contents API omits the body of files over 1 MB: fetch the blob instead
+    const bl = await gh(cfg, `/git/blobs/${j.sha}`)
+    if (!bl.ok) throw explain(bl.status, 'pull')
+    content = (await bl.json()).content
+  }
+  return { remote: await openUser<Remote>(s, unb64(content)), sha: j.sha }
 }
 
 export async function push(cfg: SyncCfg, s: Session, pf: Pf, sha: string | null): Promise<{ sha: string | null; conflict: boolean }> {
   const body = await sealUser(s, { pf, updated_at: new Date().toISOString(), device: navigator.userAgent.slice(0, 60) } satisfies Remote)
   const put = () => gh(cfg, `/contents/users/${s.uid}.bin`, { method: 'PUT', body: JSON.stringify({ message: 'sync', content: b64(body), branch: cfg.branch, ...(sha ? { sha } : {}) }) })
-  let r = await put()
-  if (r.status === 404 || (r.status === 422 && !sha)) { await ensureBranch(cfg); r = await put() }
+  let r: Response
+  try {
+    r = await put()
+    if (r.status === 404 || (r.status === 422 && !sha)) { await ensureBranch(cfg); r = await put() }
+  } catch (e) { if (e instanceof Error && e.message.startsWith('sync')) throw e; throw explain(0, 'save') }
   if (r.status === 409 || r.status === 422) return { sha, conflict: true }
-  if (!r.ok) throw new Error(`sync: push failed (${r.status})`)
+  if (!r.ok) throw explain(r.status, 'save')
   return { sha: (await r.json()).content?.sha ?? null, conflict: false }
 }
 

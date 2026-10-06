@@ -107,7 +107,7 @@ def derived_events(b: CompanyBundle) -> list[dict]:
         pct = t.get("pct_post_issue", {}).get("value")
         out.append({"event_id": f"derived:{t['tranche_id']}", "company_id": cid, "offering_id": t["offering_id"],
                     "event_type": "LOCKIN_EXPIRY", "date": t["expiry_date"], "date_kind": "derived",
-                    "detail": f"{cat} lock-in ends" + (f" — {pct}% of post-issue equity eligible for sale" if pct else ""),
+                    "detail": f"{cat} lock-in ends" + (f" — {pct}% of post-issue equity eligible for sale" if pct else "") + (" · tradable from the next business day" if t["holder_category"] == "ANCHOR" else ""),
                     "source": None, "rule_id": t["rule_id"], "detected_at": now_ist()})
     listing = [e["date"] for e in b.events if e["event_type"] == "LISTING" and e["date_kind"] == "actual"]
     if listing:

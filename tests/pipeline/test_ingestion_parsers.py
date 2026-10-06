@@ -64,3 +64,29 @@ def test_news_classifier():
     assert classify_news("Trading Window closure pursuant to SEBI (Prohibition of Insider Trading)") == "insider_trading"
     assert classify_news("Outcome of Board Meeting - Financial Results") == "results"
     assert classify_news("Receipt of order worth Rs 50 crore") == "order_win"
+
+
+def test_old_approved_drhp_stays_in_pipeline_with_sebi_approval_event(tmp_path, monkeypatch):
+    from datetime import timedelta
+    from pipeline.ingestion import run as R
+    monkeypatch.setattr(R, "DATA", tmp_path)
+    monkeypatch.setattr("pipeline.common.store.DATA", tmp_path)
+    st = R.State(True)
+    old = (R.TODAY - timedelta(days=600)).strftime("%d-%b-%Y")
+
+    class FakeNSE:
+        def _get(self, path):
+            if "equities" not in path:
+                return []
+            return [{"company": "TMC TRANSFORMERS (INDIA) LIMITED", "drhpStatus": "Approved", "drhpDate": old, "drhpAttach": "https://x/y.pdf"},
+                    {"company": "GONE LIMITED", "drhpStatus": "Returned", "drhpDate": old}]
+
+    R.ingest_offerdocs(st, FakeNSE(), R.TODAY - timedelta(days=183), R.TODAY - timedelta(days=900))
+    names = {b.company["name"] for b in st.bundles.values()}
+    assert "Tmc Transformers (India) Limited" in names or any("tmc" in n.lower() for n in names)
+    b = next(b for b in st.bundles.values() if "tmc" in b.company["name"].lower())
+    assert any(e["event_type"] == "SEBI_OBSERVATION" and e["date"] == R.TODAY.isoformat() for e in b.events)
+    assert R.lifecycle(b) == "SEBI_OBSERVED"
+    again = len([e for e in b.events if e["event_type"] == "SEBI_OBSERVATION"])
+    R.ingest_offerdocs(st, FakeNSE(), R.TODAY - timedelta(days=183), R.TODAY - timedelta(days=900))
+    assert len([e for e in b.events if e["event_type"] == "SEBI_OBSERVATION"]) == again == 1

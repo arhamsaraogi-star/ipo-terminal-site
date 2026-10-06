@@ -46,8 +46,8 @@ export default function Pipeline({ mode }: { mode: 'all' | 'upcoming' }) {
           { key: 'sz', label: 'Size', right: true, sort: r => issueSize(r), render: r => issueSize(r) != null ? crore(issueSize(r)) : <span className="muted">{dealSize(r).text}</span> },
           { key: 'pb', label: 'Price band', right: true, render: r => priceBand(r) },
           { key: 'sub', label: 'Subs.', right: true, sort: r => ipo(r)?.subscription?.total_times ?? null, render: r => { const x = ipo(r)?.subscription?.total_times; return x == null ? '—' : `${x.toFixed(1)}x` } },
-          ...(['DRHP_FILED', 'RHP_FILED', 'ISSUE_OPEN', 'LISTING'] as const).map(t => ({
-            key: t, label: { DRHP_FILED: 'DRHP', RHP_FILED: 'RHP', ANCHOR_BIDDING: 'Anchor', ISSUE_OPEN: 'Opens', LISTING: 'Listing' }[t],
+          ...(['DRHP_FILED', 'SEBI_OBSERVATION', 'RHP_FILED', 'ISSUE_OPEN', 'LISTING'] as const).map(t => ({
+            key: t, label: { DRHP_FILED: 'DRHP', SEBI_OBSERVATION: 'SEBI nod', RHP_FILED: 'RHP', ANCHOR_BIDDING: 'Anchor', ISSUE_OPEN: 'Opens', LISTING: 'Listing' }[t],
             right: true, hideMobile: true, sort: (r: typeof rows[number]) => eventDate(r, t), render: (r: typeof rows[number]) => fmtDate(eventDate(r, t), false),
           })),
         ]} />

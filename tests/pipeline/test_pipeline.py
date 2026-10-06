@@ -63,7 +63,7 @@ def test_rule_selection_by_issue_open_date():
 def test_lockins_run_from_allotment_and_are_unverified():
     t = lk.compute(BUNDLES["aster-demo-logistics"])
     anchors = [x for x in t if x["holder_category"] == "ANCHOR"]
-    assert [a["expiry_date"] for a in anchors] == ["2026-08-30", "2026-10-29"]  # allotment 2026-07-31 + 30d / 90d
+    assert [a["expiry_date"] for a in anchors] == ["2026-08-29", "2026-10-28"]  # allotment 2026-07-31 is day 1: 30d / 90d end 08-29 / 10-28
     assert sum(a["shares"]["value"] for a in anchors) == pytest.approx(10_416_666, abs=1)
     assert all(x["rule_verified"] is False for x in t)
 
@@ -118,3 +118,27 @@ def test_vault_v3_access_code():
         vault.open_v3(blob, "wrong code")
     with _pt.raises(ValueError):
         vault.seal_v3({}, "short", b"\x01" * 16)
+
+
+def test_anchor_lockin_dates_match_market_convention():
+    # MV Electrosystems: allotment 4 Aug 2026 → 30-day ends 2 Sep, 90-day ends 1 Nov (as quoted by NSE / aggregators)
+    b = copy.deepcopy(BUNDLES["aster-demo-logistics"])
+    for e in b.events:
+        if e["event_type"] == "BASIS_OF_ALLOTMENT":
+            e["date"] = "2026-08-04"
+        if e["event_type"] == "ISSUE_OPEN":
+            e["date"] = "2026-07-30"
+    anchors = [x for x in lk.compute(b) if x["holder_category"] == "ANCHOR"]
+    assert [a["expiry_date"] for a in anchors] == ["2026-09-02", "2026-11-01"]
+
+
+def test_anchor_lockin_dated_even_without_extracted_share_count():
+    b = copy.deepcopy(BUNDLES["aster-demo-logistics"])
+    b.offerings[0]["facts"].pop("anchor_shares", None)
+    b.events.append({"event_id": "x:anchor", "company_id": b.company["company_id"], "offering_id": None, "event_type": "ANCHOR_BIDDING",
+                     "date": "2026-07-29", "date_kind": "derived", "detected_at": "2026-07-01T00:00:00+05:30"})
+    anchors = [x for x in lk.compute(b) if x["holder_category"] == "ANCHOR"]
+    assert len(anchors) == 2
+    assert all(a["shares"]["status"] == "not_available" and "pct_post_issue" not in a for a in anchors)
+    from pipeline.common.store import schema_errors
+    assert not schema_errors(anchors, "records.schema.json", "lockins_file")

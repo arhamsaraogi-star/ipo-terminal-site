@@ -47,6 +47,17 @@ def _calc_fact(fid: str, metric: str, value, unit: str, formula: str, inputs: li
             "formula": formula, "inputs": inputs, "source": None, "extraction": None, "status": "ok"}
 
 
+def _anchor_expected(b: CompanyBundle, f: dict) -> bool:
+    """A Mainboard IPO is dated for anchor lock-ins unless the offer document says no anchor portion is contemplated."""
+    if (f.get("anchor_portion_contemplated") or {}).get("value") is False:
+        return False
+    return any(e["event_type"] == "ANCHOR_BIDDING" for e in b.events) or bool(f.get("anchor_shares"))
+
+
+def _anchor_shares(o: dict, f: dict, cid: str) -> dict:
+    return {"fact_id": f"{o['offering_id']}:anchor_shares", "value": None, "status": "not_available"}
+
+
 def compute(b: CompanyBundle, rules: list[dict] | None = None) -> list[dict]:
     out: list[dict] = []
     cid = b.company["company_id"]
@@ -61,29 +72,37 @@ def compute(b: CompanyBundle, rules: list[dict] | None = None) -> list[dict]:
         for cat, metric in CATEGORY_SHARE_METRIC.items():
             sf = f.get(metric)
             if not sf or sf.get("status") != "ok":
-                continue
+                # The anchor lock-in follows from the issue timeline alone, so it is dated even before the share count
+                # has been read from the offer document (shares show as "not available" until then).
+                if not (cat == "ANCHOR" and o["segment"] == "MAINBOARD" and _anchor_expected(b, f)):
+                    continue
+                sf = _anchor_shares(o, f, cid)
             rule = select_rule(o["segment"], cat, opened, rules)
             if not rule or not rule["tranches"]:
                 continue
             variant = (rule.get("variants") or {}).get("capex_objects") if f.get("objects_include_capex", {}).get("value") is True else None
             for i, t in enumerate(rule["tranches"], 1):
-                shares = round(sf["value"] * t["share_of_holding"])
+                shares = round(sf["value"] * t["share_of_holding"]) if sf["status"] == "ok" else None
                 if variant:
                     expiry = add_months(allot, variant["period_months"])
                 elif "period_days" in t:
-                    expiry = allot + timedelta(days=t["period_days"])
+                    # market convention: the allotment day is day 1, so the last locked day is allotment + (N - 1)
+                    expiry = allot + timedelta(days=t["period_days"] - (1 if rule.get("count_allotment_day") else 0))
                 else:
                     expiry = add_months(allot, t["period_months"])
                 tid = f"{o['offering_id']}:{cat.lower()}:{i}"
+                shares_fact = _calc_fact(f"{tid}:shares", "lockin_shares", shares, "shares",
+                                         f"{metric} x {t['share_of_holding']}", [sf["fact_id"]])
+                if shares is None:
+                    shares_fact["status"] = "not_available"
                 tranche = {
                     "tranche_id": tid, "company_id": cid, "offering_id": o["offering_id"],
                     "holder_category": cat,
-                    "shares": _calc_fact(f"{tid}:shares", "lockin_shares", shares, "shares",
-                                         f"{metric} x {t['share_of_holding']}", [sf["fact_id"]]),
+                    "shares": shares_fact,
                     "start_date": allot.isoformat(), "expiry_date": expiry.isoformat(),
                     "rule_id": rule["rule_id"], "rule_verified": bool(rule["verified"]),
                 }
-                if post and post.get("status") == "ok" and post["value"]:
+                if shares is not None and post and post.get("status") == "ok" and post["value"]:
                     tranche["pct_post_issue"] = _calc_fact(
                         f"{tid}:pct", "lockin_pct_post_issue", round(100 * shares / post["value"], 2), "%",
                         "lockin_shares / shares outstanding", [f"{tid}:shares", post["fact_id"]])
