@@ -51,7 +51,9 @@ def read_requests(access_code: str) -> list[dict]:
         for it in obj.get("names", [])[:200]:
             n = str(it.get("name", "")).strip()[:120]
             if len(n) >= 2:
-                seen.setdefault(key_of(n), {"name": n, "country": str(it.get("country") or "")[:40]})
+                sym = str(it.get("symbol") or "").strip().upper()
+                seen.setdefault(key_of(n), {"name": n, "country": str(it.get("country") or "")[:40],
+                                            "symbol": sym if re.fullmatch(r"[A-Z0-9&-]{1,20}", sym) else None})
     return list(seen.values())
 
 

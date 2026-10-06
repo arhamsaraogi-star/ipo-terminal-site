@@ -81,12 +81,22 @@ export interface CompanyRecord {
   facts: { financials: Fact[]; industry: Fact[]; operating?: Fact[]; peers?: Peer[]; industry_claims?: IndustryClaim[]; industry_series?: IndustrySeries[]; source_document?: string | null } | null
   documents: Doc[]; events: Event[]; lockins: Lockin[]; news: News[]; market?: Market | null
   custom?: PrivateCo
+  listed?: ListedData | null   // already-listed company followed by search: profile, results, announcements
 }
 /** [symbol, name, isin, segment, close, mcap_cr, listed_on] — search-only universe of NSE-listed companies. */
+export interface ListedData {
+  fetched_at: string
+  profile?: { price?: number; change_pct?: number; prev_close?: number; open?: number; day_high?: number; day_low?: number; vwap?: number
+    high_52w?: number; high_52w_date?: string; low_52w?: number; low_52w_date?: string; pe?: number; sector_pe?: number; sector_index?: string
+    face_value?: number; issued_shares?: number; sector?: string; industry?: string; listing_date?: string; name?: string }
+  history?: [string, number][]
+  results?: { period_end: string; income: number | null; pat: number | null; eps: number | null; audited?: string | null }[]
+  announcements?: { id: string; published_at: string; title: string; url?: string | null; category: string }[]
+}
 export type ListedRow = [string, string, string | null, string | null, number | null, number | null, string | null]
 export interface ListedPick { company_id: string; symbol: string; name: string; isin?: string | null; segment?: string | null; added_on: string }
 export interface Vault {
-  listed_index?: ListedRow[]
+  listed_index?: ListedRow[]; listed_data?: Record<string, ListedData>
   meta: { built_at: string; schema_version: number; companies: number; has_sample: boolean; repo?: string | null
     ingest?: { ran_at: string; companies: number; changes: number; log: string[]; failures: string[] } | null }
   event_types: Record<string, { label: string; group: string; order: number }>

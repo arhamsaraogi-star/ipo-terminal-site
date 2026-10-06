@@ -71,6 +71,7 @@ def test_old_approved_drhp_stays_in_pipeline_with_sebi_approval_event(tmp_path, 
     from pipeline.ingestion import run as R
     monkeypatch.setattr(R, "DATA", tmp_path)
     monkeypatch.setattr("pipeline.common.store.DATA", tmp_path)
+    monkeypatch.setattr(R, "company_dirs", lambda *a, **k: iter(()))   # CI unpacks the live state into data/ before pytest runs
     st = R.State(True)
     old = (R.TODAY - timedelta(days=600)).strftime("%d-%b-%Y")
 
@@ -105,3 +106,19 @@ def test_same_day_listing_uses_live_price_until_bhavcopy_is_out(tmp_path, monkey
     assert row["open"] == 175.0 and row["close"] == 182.5 and row["provisional"] is True
     assert json.loads((tmp_path / "quotes.json").read_text())["SRIT"]["close"] == 182.5
     assert st["live_quotes"] == 1
+
+
+def test_listed_company_parsers():
+    from pipeline.ingestion import listed_intel as L
+    q = {"info": {"companyName": "Reliance Industries Limited"}, "metadata": {"pdSymbolPe": "24.3", "pdSectorPe": "18.1", "listingDate": "29-Nov-1995", "industry": "Refineries"},
+         "securityInfo": {"faceValue": 10, "issuedSize": 13532000000}, "industryInfo": {"macro": "Energy", "basicIndustry": "Refineries & Marketing"},
+         "priceInfo": {"lastPrice": 1401.5, "pChange": 0.8, "previousClose": 1390.4, "open": 1395, "intraDayHighLow": {"min": 1388, "max": 1410},
+                       "weekHighLow": {"min": 1100, "max": 1608, "minDate": "07-Nov-2025", "maxDate": "14-Jul-2026"}}}
+    p = L.parse_profile(q)
+    assert p["price"] == 1401.5 and p["pe"] == 24.3 and p["sector_pe"] == 18.1 and p["high_52w"] == 1608 and p["industry"] == "Refineries & Marketing"
+    h = L.parse_history({"data": [{"CH_TIMESTAMP": "2026-10-02", "CH_CLOSING_PRICE": 1390.4}, {"CH_TIMESTAMP": "2026-10-01", "CH_CLOSING_PRICE": 1380}]})
+    assert h == [["2026-10-01", 1380.0], ["2026-10-02", 1390.4]]
+    r = L.parse_results([{"toDate": "30-Jun-2026", "income": 25000000000, "profitLossForPeriod": 1800000000, "reDilEPS": "12.5"}])
+    assert r[0]["period_end"] == "2026-06-30" and r[0]["income"] == 2500.0 and r[0]["pat"] == 180.0
+    a = L.parse_announcements("X", [{"sort_date": "2026-10-05 10:00:00", "desc": "Board Meeting", "attchmntText": "Outcome of meeting", "seq_id": "7"}], lambda t: "board_meeting")
+    assert a[0]["id"] == "7" and a[0]["category"] == "board_meeting"

@@ -166,6 +166,36 @@ function ReadMore({ text }: { text: string }) {
     {text.length > 320 && <button className="text-sm mt-1" style={{ color: 'var(--accent)' }} onClick={() => setOpen(o => !o)}>{open ? 'Show less' : 'Read more'}</button>}</div>
 }
 
+function ListedKeyData({ r }: { r: CompanyRecord }) {
+  const d = r.listed, p = d?.profile
+  if (!d) return <Card title="Key data" solid><p className="ink2">Fetching this company's data from NSE — it appears after the next refresh (about 15 minutes).</p></Card>
+  const rng = p?.low_52w != null && p?.high_52w != null && p?.price != null ? Math.max(0, Math.min(100, ((p.price - p.low_52w) / (p.high_52w - p.low_52w || 1)) * 100)) : null
+  return (
+    <div className="space-y-5">
+      <Card title="Key data" solid>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <M label="52-week range">{p?.low_52w != null ? `${inr(p.low_52w)} – ${inr(p.high_52w)}` : '—'}</M>
+          <M label="P/E" sub={p?.sector_pe != null ? `sector ${p.sector_pe.toFixed(1)}` : undefined}>{p?.pe != null ? p.pe.toFixed(1) : '—'}</M>
+          <M label="Industry" sub={p?.sector}>{p?.industry ?? '—'}</M>
+          <M label="Face value">{p?.face_value != null ? inr(p.face_value) : '—'}</M>
+        </div>
+        {rng != null && <div className="mt-4"><div className="h-2 rounded-full" style={{ background: 'var(--hairline)' }}><div className="h-2 rounded-full" style={{ width: `${rng}%`, background: 'var(--accent)' }} /></div>
+          <div className="muted text-xs mt-1">Price sits {rng.toFixed(0)}% of the way from the 52-week low to the high</div></div>}
+        <p className="muted text-xs mt-3">From NSE, refreshed every few hours{d.fetched_at ? ` · last ${fmtDateTime(d.fetched_at)}` : ''}. For deeper numbers, open Screener (button above).</p>
+      </Card>
+      {!!d.results?.length && (
+        <Card title="Quarterly results (₹ crore)" solid>
+          <Table rows={d.results} cols={[
+            { key: 'p', label: 'Quarter ended', render: x => <b>{fmtDate(x.period_end)}</b> },
+            { key: 'i', label: 'Income', right: true, render: x => x.income != null ? num(x.income, 1) : '—' },
+            { key: 'a', label: 'Profit after tax', right: true, render: x => x.pat != null ? num(x.pat, 1) : '—' },
+            { key: 'e', label: 'EPS (₹)', right: true, render: x => x.eps != null ? num(x.eps, 2) : '—' },
+          ]} />
+        </Card>)}
+    </div>
+  )
+}
+
 function Overview({ r }: { r: CompanyRecord }) {
   const v = useVault()
   const upcoming = r.events.filter(e => daysUntil(e.date) >= 0).slice(0, 6)
@@ -178,6 +208,7 @@ function Overview({ r }: { r: CompanyRecord }) {
         </Card>
       )}
       <PriceChart r={r} />
+      {r.company.external && <ListedKeyData r={r} />}
       {!r.company.external && <AnchorCard r={r} />}
       {!r.company.external && <div className="grid xl:grid-cols-2 gap-5">
         <DealTeam r={r} />
@@ -256,6 +287,7 @@ export const FIN_ORDER: [string, string][] = [
   ['debt_equity', 'Debt / equity (x)'], ['roe', 'ROE'], ['ronw', 'Return on net worth'], ['roce', 'ROCE'], ['nav_per_share', 'NAV per share (₹)'],
 ]
 function Financials({ r }: { r: CompanyRecord }) {
+  if (r.company.external) return <ListedKeyData r={r} />
   const { periods, byMetric } = finTable(r)
   if (!periods.length) {
     const queued = r.documents.some(d => ['DRHP', 'RHP', 'PROSPECTUS', 'UDRHP'].includes(d.doc_type) && /\.(pdf|zip)$/i.test(d.url))

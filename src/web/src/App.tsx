@@ -88,7 +88,7 @@ export default function App() {
     if (!s || !c || !v) return
     const p = pfRef.current
     const byId = new Map(v.companies.map(r => [r.company.company_id, r.company.name]))
-    const names = [...p.privates.map(x => ({ name: x.name, country: x.country })), ...(p.listed ?? []).map(x => ({ name: x.name })),
+    const names = [...p.privates.map(x => ({ name: x.name, country: x.country })), ...(p.listed ?? []).map(x => ({ name: x.name, symbol: x.symbol })),
       ...[...new Set([...p.tracking.map(t => t.company_id), ...p.holdings.map(h => h.company_id)])].map(id => byId.get(id)).filter(Boolean).map(n => ({ name: n as string }))]
     const sig = JSON.stringify(names.map(n => n.name).sort())
     const k = `ipo-terminal:req:${s.uid}`
@@ -139,7 +139,7 @@ export default function App() {
     const tracking = pf.tracking.map(t => ({ ...t, company_id: fix(t.company_id) }))
     return {
       ...vault, companies: [...vault.companies, ...pf.privates.map(privateRecord),
-        ...(pf.listed ?? []).filter(l => !vault.companies.some(c => c.company.identifiers.nse_symbol === l.symbol)).map(l => listedRecord(l, vault.listed_index?.find(r => r[0] === l.symbol), vault.meta.built_at.slice(0, 10)))],
+        ...(pf.listed ?? []).filter(l => !vault.companies.some(c => c.company.identifiers.nse_symbol === l.symbol)).map(l => listedRecord(l, vault.listed_index?.find(r => r[0] === l.symbol), vault.meta.built_at.slice(0, 10), vault.listed_data?.[l.symbol]))],
       portfolio: { holdings: pf.holdings.map(h => ({ ...h, company_id: fix(h.company_id) })), tracking, privates: pf.privates,
         watchlist: tracking.filter(t => t.status !== 'PASSED').map(t => t.company_id) },
     }

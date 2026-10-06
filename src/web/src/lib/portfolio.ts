@@ -1,6 +1,6 @@
 // Holdings, tracked companies and your own private companies live in this browser (the public repo never sees them).
 // Export / import moves them between devices.
-import type { CompanyRecord, Holding, ListedPick, ListedRow, PrivateCo, Track, TrackStatus } from './types'
+import type { CompanyRecord, Holding, ListedData, ListedPick, ListedRow, PrivateCo, Track, TrackStatus } from './types'
 
 export interface Pf { holdings: Holding[]; watchlist: string[]; tracking: Track[]; privates: PrivateCo[]; listed?: ListedPick[]; deleted?: string[] }
 const KEY = 'ipo-terminal:portfolio:v1'
@@ -99,13 +99,19 @@ export const listedId = (symbol: string) => `nse-${symbol.toLowerCase().replace(
 export const screenerUrl = (symbol: string) => `https://www.screener.in/company/${encodeURIComponent(symbol)}/`
 export const pickFromRow = (r: ListedRow): ListedPick => ({ company_id: listedId(r[0]), symbol: r[0], name: r[1], isin: r[2], segment: r[3], added_on: today() })
 /** A listed company becomes a normal record (price from the exchange's daily file) once it is in the portfolio or tracked. */
-export function listedRecord(p: ListedPick, row?: ListedRow | null, asOf?: string | null): CompanyRecord {
-  const close = row?.[4] ?? null
+export function listedRecord(p: ListedPick, row?: ListedRow | null, asOf?: string | null, data?: ListedData | null): CompanyRecord {
+  const pr = data?.profile
+  const close = pr?.price ?? row?.[4] ?? null
+  const hist = data?.history ?? []
+  const news = (data?.announcements ?? []).map(a => ({ news_id: `${p.company_id}:nse:${a.id}`, company_id: p.company_id, published_at: a.published_at, title: a.title,
+    url: a.url ?? screenerUrl(p.symbol), publisher: 'NSE', tier: 'official' as const, category: a.category }))
   return {
     company: { company_id: p.company_id, name: p.name, aliases: [], identifiers: { nse_symbol: p.symbol, isin: p.isin ?? row?.[2] ?? null },
-      segment: p.segment === 'SME' ? 'SME' : 'MAINBOARD', lifecycle: 'LISTED', updated_at: p.added_on, sources: ['NSE listed universe'], external: true },
-    offerings: [], facts: null, documents: [], events: [], lockins: [], news: [],
-    market: close ? { symbol: p.symbol, quote: { date: asOf ?? p.added_on, close, mcap_cr: row?.[5] ?? null, series: 'EQ' }, listing: null, history: [], source: 'NSE end-of-day archives; delayed' } : null,
+      segment: p.segment === 'SME' ? 'SME' : 'MAINBOARD', lifecycle: 'LISTED', updated_at: p.added_on, sources: ['NSE listed universe'], external: true,
+      sector: pr?.sector ?? null, industry: pr?.industry ?? null },
+    offerings: [], facts: null, documents: [], events: [], lockins: [], news, listed: data ?? null,
+    market: close ? { symbol: p.symbol, quote: { date: asOf ?? p.added_on, close, prev_close: pr?.prev_close ?? null, open: pr?.open ?? null, high: pr?.day_high ?? null, low: pr?.day_low ?? null,
+      mcap_cr: row?.[5] ?? (pr?.price && pr?.issued_shares ? (pr.price * pr.issued_shares) / 1e7 : null), shares: pr?.issued_shares ?? null, series: 'EQ' }, listing: null, history: hist, source: 'NSE (quote, daily history); delayed' } : null,
   }
 }
 

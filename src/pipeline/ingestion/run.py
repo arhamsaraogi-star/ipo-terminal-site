@@ -792,6 +792,8 @@ def main(argv=None) -> int:
         try:
             from pipeline.ingestion import private_intel
             private_intel.update(Client(min_interval=1.0), os.environ["TERMINAL_PASSPHRASE"], st.log)
+            from pipeline.ingestion import listed_intel
+            listed_intel.update(nse, private_intel.read_requests(os.environ["TERMINAL_PASSPHRASE"]), st.log, classify_news, budget_ok=lambda: not out_of_time(0.95))
         except Exception as e:  # noqa: BLE001 — never fatal
             st.failures.append(f"web news: {str(e)[:120]}")
 

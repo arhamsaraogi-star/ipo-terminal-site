@@ -1,6 +1,8 @@
 # Changelog
 
 ## 0.9.0 — listed-company search, live listing-day prices
+- Listed companies you follow get real data from NSE: price, 52-week range, P/E vs sector, industry, a year of closes, quarterly results and exchange announcements (as news); refreshed every few hours
+- Fixed a CI test that read the live state directory
 - Every NSE-listed company is searchable from the search box ("Listed companies") without appearing anywhere else; Track it or add it to the portfolio and it becomes a normal record whose news is followed; Screener link on every listed company
 - Listing-day prices: until the exchange's end-of-day file is published (evening), today's listings show the live NSE price (open, price, vs issue) instead of dashes
 
