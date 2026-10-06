@@ -13,7 +13,7 @@ export default function ListedCompany({ symbol }: { symbol: string }) {
   const r = row ?? [symbol, symbol, null, null, null, null, null] as const
   const add = (track: boolean) => {
     const pick = pickFromRow(r as Parameters<typeof pickFromRow>[0])
-    let next = { ...pf, listed: [...(pf.listed ?? []).filter(x => x.company_id !== pick.company_id), pick] }
+    let next: typeof pf = { ...pf, listed: [...(pf.listed ?? []).filter(x => x.company_id !== pick.company_id), pick] }
     if (track) next = setTrack(next, pick.company_id, 'INTERESTED')
     setPf(next)
     go(`/company/${pick.company_id}`)
