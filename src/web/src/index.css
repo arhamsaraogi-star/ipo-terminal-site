@@ -255,7 +255,22 @@ body {
 .ex-sec { margin-bottom: 22px; }
 .ex-break { break-before: page; page-break-before: always; margin-top: 56px; padding-top: 28px; border-top: 1px solid #d6d3cc; }
 .ex-foot { margin-top: 36px; border-top: 1px solid #161616; padding-top: 10px; font-size: 12px; color: #6b6b6b; text-align: center; }
+/* one-pager */
+.ex-page { break-before: page; page-break-before: always; margin-top: 56px; padding-top: 30px; border-top: 1px solid #d6d3cc; }
+.ex-ph { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 14px; }
+.ex-ph-n { font-family: Inter, Arial, sans-serif; font-size: 13px; font-weight: 700; border: 1.5px solid #161616; border-radius: 999px; min-width: 30px; height: 30px; display: grid; place-items: center; margin-top: 6px; }
+.ex-facts { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid #161616; border-bottom: 1px solid #161616; margin: 6px 0 10px; }
+.ex-facts > div { padding: 10px 12px; } .ex-facts > div + div { border-left: 1px solid #d6d3cc; }
+.ex-facts span { display: block; font-family: Inter, Arial, sans-serif; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: #6b6b6b; }
+.ex-facts b { display: block; font-size: 18px; line-height: 1.3; margin-top: 2px; }
+.ex-lm { font-size: 14px; color: #333; margin: 0 0 4px; }
+.ex-two { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+.ex-news { padding: 10px 0; border-bottom: 1px solid #e3e0d9; break-inside: avoid; }
+.ex-news-co { font-family: Inter, Arial, sans-serif; font-weight: 700; font-size: 14px; letter-spacing: .02em; margin-bottom: 2px; }
+.ex-news ul { list-style: none; padding: 0; margin: 0; } .ex-news li { margin: 4px 0; font-size: 15.5px; }
+.ex-news a { text-decoration: none; } .ex-news a:hover { text-decoration: underline; }
 @media (max-width: 640px) {
+  .ex-facts, .ex-two { grid-template-columns: 1fr 1fr; } .ex-two { grid-template-columns: 1fr; gap: 0; }
   .exec { padding: 26px 18px; font-size: 16px; } .exec h1 { font-size: 34px; } .ex-stats b { font-size: 20px; } .ex-dossier-title { font-size: 24px; }
   .ex-table { font-size: 13.5px; } .ex-table th, .ex-table td { padding: 7px 6px; }
 }
@@ -265,6 +280,7 @@ body {
   .exec { box-shadow: none; border-radius: 0; padding: 0; background: #fff; font-size: 12pt; }
   .exec h1 { font-size: 36pt; } .ex-dossier-title { font-size: 22pt; }
   .ex-table { font-size: 10.5pt; } .ex-fin { font-size: 9.5pt; }
-  .ex-break { margin-top: 0; border-top: none; padding-top: 0; }
+  .ex-break, .ex-page { margin-top: 0; border-top: none; padding-top: 0; }
+  .ex-facts b { font-size: 13pt; } .ex-news li { font-size: 11pt; }
   .ex-table tr, figure { break-inside: avoid; }
 }
