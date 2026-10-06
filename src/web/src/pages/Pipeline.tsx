@@ -15,7 +15,7 @@ export default function Pipeline({ mode }: { mode: 'all' | 'upcoming' }) {
   const sectors = [...new Set(v.companies.map(r => r.company.sector).filter(Boolean))] as string[]
   const rows = useMemo(() => v.companies.filter(r => {
     const c = r.company
-    if (c.lifecycle === 'PRIVATE') return false
+    if (c.lifecycle === 'PRIVATE' || c.external) return false
     if (mode === 'upcoming' && !['ISSUE_ANNOUNCED', 'ISSUE_OPEN', 'ISSUE_CLOSED', 'RHP_FILED'].includes(c.lifecycle)) return false
     return (seg === 'ALL' || c.segment === seg) && (stage === 'ALL' || c.lifecycle === stage) && (sector === 'ALL' || c.sector === sector)
   }), [v, mode, seg, stage, sector])

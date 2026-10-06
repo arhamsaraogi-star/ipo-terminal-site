@@ -108,8 +108,23 @@ def fetch_equity_lists(client: Client) -> dict[str, dict]:
     return out
 
 
+def live_quote(get, sym: str) -> dict | None:
+    """Intraday price for a symbol from NSE's quote API. `get` is a callable path -> json (NSE._get). None if unavailable."""
+    try:
+        j = get(f"quote-equity?symbol={sym}") or {}
+    except Exception:  # noqa: BLE001 — a missing live price is never fatal; the end-of-day file fills it in
+        return None
+    pi = j.get("priceInfo") or {}
+    last = _num(pi.get("lastPrice"))
+    if last is None:
+        return None
+    hl = pi.get("intraDayHighLow") or {}
+    return {"close": last, "open": _num(pi.get("open")), "prev_close": _num(pi.get("previousClose")),
+            "high": _num(hl.get("max")), "low": _num(hl.get("min"))}
+
+
 def update(client: Client, symbols: dict[str, str], listing_dates: dict[str, str], *, history_days: int = 400,
-           budget_ok=lambda: True, log=print) -> dict:
+           budget_ok=lambda: True, log=print, live_get=None) -> dict:
     """symbols: {SYMBOL: company_id} to track. listing_dates: {SYMBOL: 'YYYY-MM-DD'}."""
     MKT.mkdir(parents=True, exist_ok=True)
     quotes: dict = read_json(MKT / "quotes.json", {})
@@ -137,14 +152,22 @@ def update(client: Client, symbols: dict[str, str], listing_dates: dict[str, str
             write_json(MKT / "universe.json", {"date": d.isoformat(), "rows": {k: [v["close"], v.get("mcap_cr"), v.get("name")] for k, v in q.items()}})
             break
 
-    # 2) listing-day OHLC for symbols not yet captured
+    # 2) listing-day OHLC for symbols not yet captured (a provisional intraday row is replaced once the day's file is out)
     for sym, ld in listing_dates.items():
-        if sym in listing or not ld or ld > today.isoformat() or not budget_ok():
+        if (sym in listing and not listing[sym].get("provisional")) or not ld or ld > today.isoformat() or not budget_ok():
             continue
         b = fetch_bhav(client, date.fromisoformat(ld))
         if b and sym in b:
             listing[sym] = {"date": ld, **{k: b[sym][k] for k in ("open", "high", "low", "close", "prev_close")}}
             stats["listing_days"] += 1
+        elif live_get and (today - date.fromisoformat(ld)).days <= 3:
+            # the exchange publishes its end-of-day files in the evening: until then show the live price
+            lq = live_quote(live_get, sym)
+            if lq:
+                listing[sym] = {"date": ld, **{k: lq[k] for k in ("open", "high", "low", "close", "prev_close")}, "provisional": True}
+                quotes[sym] = {**quotes.get(sym, {}), "date": today.isoformat(), "series": quotes.get(sym, {}).get("series"), "live": True,
+                               **{k: lq[k] for k in ("close", "open", "high", "low", "prev_close")}}
+                stats["live_quotes"] = stats.get("live_quotes", 0) + 1
 
     # 3) daily close history for tracked symbols (each trading day folded in once)
     earliest = min([v for v in listing_dates.values() if v] or [today.isoformat()])

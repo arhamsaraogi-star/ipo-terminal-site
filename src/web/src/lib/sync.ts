@@ -74,6 +74,7 @@ export function merge(prefer: Pf, other: Pf): Pf {
     holdings: by(prefer.holdings, other.holdings).filter(keep('h')),
     tracking: by(prefer.tracking, other.tracking).filter(keep('t')),
     privates: by(prefer.privates, other.privates).filter(keep('p')),
+    listed: by(prefer.listed ?? [], other.listed ?? []).filter(keep('l')),
     watchlist: [], deleted: [...deleted].slice(-500),
   }
 }

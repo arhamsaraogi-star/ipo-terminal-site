@@ -90,3 +90,18 @@ def test_old_approved_drhp_stays_in_pipeline_with_sebi_approval_event(tmp_path, 
     again = len([e for e in b.events if e["event_type"] == "SEBI_OBSERVATION"])
     R.ingest_offerdocs(st, FakeNSE(), R.TODAY - timedelta(days=183), R.TODAY - timedelta(days=900))
     assert len([e for e in b.events if e["event_type"] == "SEBI_OBSERVATION"]) == again == 1
+
+
+def test_same_day_listing_uses_live_price_until_bhavcopy_is_out(tmp_path, monkeypatch):
+    from datetime import date
+    from pipeline.ingestion import market as M
+    monkeypatch.setattr(M, "MKT", tmp_path)
+    monkeypatch.setattr(M, "fetch_pr", lambda c, d: None)
+    monkeypatch.setattr(M, "fetch_bhav", lambda c, d: None)
+    live = {"priceInfo": {"lastPrice": 182.5, "open": 175.0, "previousClose": 167.0, "intraDayHighLow": {"max": 190.0, "min": 174.0}}}
+    st = M.update(None, {"SRIT": "srit"}, {"SRIT": date.today().isoformat()}, live_get=lambda path: live, log=lambda m: None)
+    import json
+    row = json.loads((tmp_path / "listing.json").read_text())["SRIT"]
+    assert row["open"] == 175.0 and row["close"] == 182.5 and row["provisional"] is True
+    assert json.loads((tmp_path / "quotes.json").read_text())["SRIT"]["close"] == 182.5
+    assert st["live_quotes"] == 1

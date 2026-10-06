@@ -142,3 +142,14 @@ def test_anchor_lockin_dated_even_without_extracted_share_count():
     assert all(a["shares"]["status"] == "not_available" and "pct_post_issue" not in a for a in anchors)
     from pipeline.common.store import schema_errors
     assert not schema_errors(anchors, "records.schema.json", "lockins_file")
+
+
+def test_listed_index_excludes_tracked_companies(tmp_path):
+    import json
+    from pipeline.build.compile import listed_index
+    (tmp_path / "market").mkdir()
+    (tmp_path / "market" / "listed.json").write_text(json.dumps({"RELIANCE": ["Reliance Industries", "INE002A01018", "MAINBOARD", "1995-11-29"], "SRIT": ["SRIT India", "INE0X", "MAINBOARD", "2026-10-06"]}))
+    (tmp_path / "market" / "universe.json").write_text(json.dumps({"date": "2026-10-05", "rows": {"RELIANCE": [1400.5, 1900000.0, "Reliance"]}}))
+    comps = [{"company": {"identifiers": {"nse_symbol": "SRIT", "isin": None}}}]
+    rows = listed_index(comps, tmp_path)
+    assert rows == [["RELIANCE", "Reliance Industries", "INE002A01018", "MAINBOARD", 1400.5, 1900000.0, "1995-11-29"]]

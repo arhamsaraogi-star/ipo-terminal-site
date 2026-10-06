@@ -1,8 +1,8 @@
 // Holdings, tracked companies and your own private companies live in this browser (the public repo never sees them).
 // Export / import moves them between devices.
-import type { CompanyRecord, Holding, PrivateCo, Track, TrackStatus } from './types'
+import type { CompanyRecord, Holding, ListedPick, ListedRow, PrivateCo, Track, TrackStatus } from './types'
 
-export interface Pf { holdings: Holding[]; watchlist: string[]; tracking: Track[]; privates: PrivateCo[]; deleted?: string[] }
+export interface Pf { holdings: Holding[]; watchlist: string[]; tracking: Track[]; privates: PrivateCo[]; listed?: ListedPick[]; deleted?: string[] }
 const KEY = 'ipo-terminal:portfolio:v1'
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -15,19 +15,20 @@ function normalise(p: Partial<Pf>): Pf {
     if (typeof id === 'string' && !tracking.some(t => t.company_id === id)) tracking.push({ company_id: id, status: 'INTERESTED', added_on: today() })
   }
   const privates = Array.isArray(p.privates) ? p.privates.filter(x => x && x.company_id && x.name).map(x => ({ ...x, rounds: Array.isArray(x.rounds) ? x.rounds : [] })) : []
-  return { holdings, watchlist: [], tracking, privates, deleted: Array.isArray(p.deleted) ? p.deleted.filter(x => typeof x === 'string') : [] }
+  const listed = Array.isArray(p.listed) ? p.listed.filter(x => x && x.company_id && x.symbol && x.name) : []
+  return { holdings, watchlist: [], tracking, privates, listed, deleted: Array.isArray(p.deleted) ? p.deleted.filter(x => typeof x === 'string') : [] }
 }
 
 /** Record deletions as tombstones (so a sync merge never resurrects them) and clear tombstones for re-added items. */
 export function withTombstones(prev: Pf, next: Pf): Pf {
-  const ids = (p: Pf) => new Set([...p.holdings.map(x => `h:${x.company_id}`), ...p.tracking.map(x => `t:${x.company_id}`), ...p.privates.map(x => `p:${x.company_id}`)])
+  const ids = (p: Pf) => new Set([...p.holdings.map(x => `h:${x.company_id}`), ...p.tracking.map(x => `t:${x.company_id}`), ...p.privates.map(x => `p:${x.company_id}`), ...(p.listed ?? []).map(x => `l:${x.company_id}`)])
   const a = ids(prev), b = ids(next)
   const del = new Set(next.deleted ?? prev.deleted ?? [])
   for (const k of a) if (!b.has(k)) del.add(k)
   for (const k of b) del.delete(k)
   return { ...next, deleted: [...del].slice(-500) }
 }
-export const isEmpty = (p: Pf) => !p.holdings.length && !p.tracking.length && !p.privates.length
+export const isEmpty = (p: Pf) => !p.holdings.length && !p.tracking.length && !p.privates.length && !(p.listed ?? []).length
 
 const key = (uid?: string) => (uid ? `ipo-terminal:pf:${uid}` : KEY)
 export function loadPf(uid?: string): Pf {
@@ -90,6 +91,21 @@ export function privateRecord(p: PrivateCo): CompanyRecord {
     },
     offerings: [], facts: null, documents: [], lockins: [], news: [], market: null,
     events: [], custom: { ...p, rounds },
+  }
+}
+
+// ───────── already-listed companies pulled in by search ─────────
+export const listedId = (symbol: string) => `nse-${symbol.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+export const screenerUrl = (symbol: string) => `https://www.screener.in/company/${encodeURIComponent(symbol)}/`
+export const pickFromRow = (r: ListedRow): ListedPick => ({ company_id: listedId(r[0]), symbol: r[0], name: r[1], isin: r[2], segment: r[3], added_on: today() })
+/** A listed company becomes a normal record (price from the exchange's daily file) once it is in the portfolio or tracked. */
+export function listedRecord(p: ListedPick, row?: ListedRow | null, asOf?: string | null): CompanyRecord {
+  const close = row?.[4] ?? null
+  return {
+    company: { company_id: p.company_id, name: p.name, aliases: [], identifiers: { nse_symbol: p.symbol, isin: p.isin ?? row?.[2] ?? null },
+      segment: p.segment === 'SME' ? 'SME' : 'MAINBOARD', lifecycle: 'LISTED', updated_at: p.added_on, sources: ['NSE listed universe'], external: true },
+    offerings: [], facts: null, documents: [], events: [], lockins: [], news: [],
+    market: close ? { symbol: p.symbol, quote: { date: asOf ?? p.added_on, close, mcap_cr: row?.[5] ?? null, series: 'EQ' }, listing: null, history: [], source: 'NSE end-of-day archives; delayed' } : null,
   }
 }
 

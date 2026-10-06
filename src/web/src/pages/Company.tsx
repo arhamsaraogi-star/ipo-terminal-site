@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { screenerUrl } from '../lib/portfolio'
 import { Area, AreaChart, Bar, CartesianGrid, ComposedChart, Legend, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { usePf, useVault } from '../App'
 import { Card, Delta, FactValue, Pill, Seg, SourceLine, Stage, Table } from '../components/ui'
@@ -48,6 +49,7 @@ export default function CompanyPage({ id }: { id: string }) {
           <div className="flex gap-2 flex-wrap">
             <button className="btn btn-primary" onClick={() => setForm(f => !f)}>{held ? '★ Edit holding' : '★ Add to portfolio'}</button>
             <TrackButton id={cid} />
+            {c.identifiers.nse_symbol && <a className="btn hide-phone" href={screenerUrl(c.identifiers.nse_symbol)} target="_blank" rel="noreferrer" title="Open on Screener (uses your own login)">Screener ↗</a>}
             <button className="btn hide-phone" onClick={() => window.print()} title="One-page brief for an investment committee">⎙ IC brief</button>
           </div>
         </div>
@@ -176,11 +178,11 @@ function Overview({ r }: { r: CompanyRecord }) {
         </Card>
       )}
       <PriceChart r={r} />
-      <AnchorCard r={r} />
-      <div className="grid xl:grid-cols-2 gap-5">
+      {!r.company.external && <AnchorCard r={r} />}
+      {!r.company.external && <div className="grid xl:grid-cols-2 gap-5">
         <DealTeam r={r} />
         <OfferAsFiled r={r} />
-      </div>
+      </div>}
       <FinancialSnapshot r={r} />
       <Card title="Coming up" solid>
         <Table rows={upcoming} empty="No upcoming events" cols={[

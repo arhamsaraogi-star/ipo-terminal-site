@@ -120,6 +120,23 @@ def derived_events(b: CompanyBundle) -> list[dict]:
     return out
 
 
+def listed_index(companies: list[dict], data: Path) -> list[list]:
+    """Search-only universe: every NSE-listed security that is NOT already a tracked company. Never listed anywhere in the
+    app; it only answers the search box, and a company enters the terminal when you track it or add it to your portfolio.
+    Row: [symbol, name, isin, segment, close, mcap_cr, listed_on]."""
+    listed = read_json(data / "market" / "listed.json", {})
+    rows = (read_json(data / "market" / "universe.json", {}) or {}).get("rows", {})
+    have = {c["company"]["identifiers"].get("nse_symbol") for c in companies} | {c["company"]["identifiers"].get("isin") for c in companies}
+    out = []
+    for sym, rec in sorted(listed.items()):
+        name, isin, seg, on = (list(rec) + [None] * 4)[:4]
+        if sym in have or (isin and isin in have):
+            continue
+        px = rows.get(sym) or [None, None, None]
+        out.append([sym, name, isin, seg, px[0], px[1], on])
+    return out
+
+
 def build_payload(data: Path = DATA, write_derived: bool = True) -> tuple[dict, Report]:
     report = Report()
     companies = []
@@ -159,6 +176,7 @@ def build_payload(data: Path = DATA, write_derived: bool = True) -> tuple[dict, 
                  "ingest": read_json(data / "index" / "ingest_status.json", None)},
         "event_types": event_types(),
         "companies": companies,
+        "listed_index": listed_index(companies, data),
         "changes": changes[:1000],
         "portfolio": portfolio,
         "redirects": read_json(data / "index" / "redirects.json", {}),

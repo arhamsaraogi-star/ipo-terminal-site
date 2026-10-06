@@ -20,6 +20,7 @@ export interface Company {
   overview?: { summary: string; segments?: string[]; source?: Source } | null
   website?: string | null; ir_url?: string | null; is_sample?: boolean; updated_at: string
   drhp_status?: string | null; sources?: string[]; promoters?: string[]
+  external?: boolean   // an already-listed company you pulled in by search: never shown in the IPO lists
 }
 export interface Offering {
   offering_id: string; company_id: string; type: string; segment: string; exchanges?: string[]
@@ -81,7 +82,11 @@ export interface CompanyRecord {
   documents: Doc[]; events: Event[]; lockins: Lockin[]; news: News[]; market?: Market | null
   custom?: PrivateCo
 }
+/** [symbol, name, isin, segment, close, mcap_cr, listed_on] — search-only universe of NSE-listed companies. */
+export type ListedRow = [string, string, string | null, string | null, number | null, number | null, string | null]
+export interface ListedPick { company_id: string; symbol: string; name: string; isin?: string | null; segment?: string | null; added_on: string }
 export interface Vault {
+  listed_index?: ListedRow[]
   meta: { built_at: string; schema_version: number; companies: number; has_sample: boolean; repo?: string | null
     ingest?: { ran_at: string; companies: number; changes: number; log: string[]; failures: string[] } | null }
   event_types: Record<string, { label: string; group: string; order: number }>

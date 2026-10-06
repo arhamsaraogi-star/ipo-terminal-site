@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.0 — listed-company search, live listing-day prices
+- Every NSE-listed company is searchable from the search box ("Listed companies") without appearing anywhere else; Track it or add it to the portfolio and it becomes a normal record whose news is followed; Screener link on every listed company
+- Listing-day prices: until the exchange's end-of-day file is published (evening), today's listings show the live NSE price (open, price, vs issue) instead of dashes
+
 ## 0.8.0 — The Executive Print
 - New black-and-white, large-type morning report (button on Home): greeting and date, headline numbers, top story, new DRHP filings, SEBI approvals, listings, significant updates, week-ahead calendar and lock-ins, recent-listing scorecard, your positions, headlines
 - A full dossier for every new DRHP: business overview, offer details and lead managers, complete financial table, revenue/profit chart, industry charts and listed peers

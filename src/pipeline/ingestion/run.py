@@ -567,6 +567,7 @@ def enrich_from_equity_lists(st: State, client: Client, since: date) -> None:
         st.failures.append(f"NSE equity lists: {e}")
         return
     write_json(DATA / "market" / "names.json", {k: v["name"] for k, v in lists.items()})
+    write_json(DATA / "market" / "listed.json", {k: [v["name"], v.get("isin"), v["segment"], v.get("listed_on")] for k, v in lists.items()})
     by_norm: dict[str, list[str]] = {}
     for sym, r in lists.items():
         if r.get("listed_on") and r["listed_on"] >= since.isoformat():
@@ -605,7 +606,7 @@ def update_market(st: State, client: Client) -> None:
             symbols[sym] = cid
             listing[sym] = ld
     try:
-        M.update(client, symbols, listing, budget_ok=lambda: not out_of_time(0.55), log=st.log.append)
+        M.update(client, symbols, listing, budget_ok=lambda: not out_of_time(0.55), log=st.log.append, live_get=N.NSE(client)._get)
     except Exception as e:  # noqa: BLE001
         st.failures.append(f"Market data: {e}")
     # BSE-only listings (no NSE symbol): prices from the BSE bhavcopy

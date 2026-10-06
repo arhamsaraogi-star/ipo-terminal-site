@@ -18,7 +18,8 @@ import Tracked from './pages/Tracked'
 import AnchorDesk from './pages/AnchorDesk'
 import ExecutivePrint from './pages/ExecutivePrint'
 import { NewPrivatePage } from './pages/PrivateCo'
-import { privateRecord, loadPf, savePf, takeLegacy, withTombstones, normalisePf, type Pf } from './lib/portfolio'
+import ListedCompany from './pages/ListedCompany'
+import { listedRecord, privateRecord, loadPf, savePf, takeLegacy, withTombstones, normalisePf, type Pf } from './lib/portfolio'
 
 // ───────── data context ─────────
 const Ctx = createContext<Vault | null>(null)
@@ -87,7 +88,7 @@ export default function App() {
     if (!s || !c || !v) return
     const p = pfRef.current
     const byId = new Map(v.companies.map(r => [r.company.company_id, r.company.name]))
-    const names = [...p.privates.map(x => ({ name: x.name, country: x.country })),
+    const names = [...p.privates.map(x => ({ name: x.name, country: x.country })), ...(p.listed ?? []).map(x => ({ name: x.name })),
       ...[...new Set([...p.tracking.map(t => t.company_id), ...p.holdings.map(h => h.company_id)])].map(id => byId.get(id)).filter(Boolean).map(n => ({ name: n as string }))]
     const sig = JSON.stringify(names.map(n => n.name).sort())
     const k = `ipo-terminal:req:${s.uid}`
@@ -137,7 +138,8 @@ export default function App() {
     const fix = (id: string) => rd[id] ?? id
     const tracking = pf.tracking.map(t => ({ ...t, company_id: fix(t.company_id) }))
     return {
-      ...vault, companies: [...vault.companies, ...pf.privates.map(privateRecord)],
+      ...vault, companies: [...vault.companies, ...pf.privates.map(privateRecord),
+        ...(pf.listed ?? []).filter(l => !vault.companies.some(c => c.company.identifiers.nse_symbol === l.symbol)).map(l => listedRecord(l, vault.listed_index?.find(r => r[0] === l.symbol), vault.meta.built_at.slice(0, 10)))],
       portfolio: { holdings: pf.holdings.map(h => ({ ...h, company_id: fix(h.company_id) })), tracking, privates: pf.privates,
         watchlist: tracking.filter(t => t.status !== 'PASSED').map(t => t.company_id) },
     }
@@ -360,6 +362,7 @@ function Shell({ onLock, updated }: { onLock: () => void; updated: string | null
       case '/news': return <NewsPage />
       case '/review': return <Review />
       case '/new-private': return <NewPrivatePage name={arg ? decodeURIComponent(arg) : ''} />
+      case '/listed-co': return <ListedCompany symbol={decodeURIComponent(arg ?? '')} />
       case '/company': return <CompanyPage id={decodeURIComponent(arg ?? '')} />
       default: return <div className="glass p-10">Not found. <a href="#/">Back to dashboard</a></div>
     }
@@ -470,7 +473,9 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
       'company.identifiers.bse_code', 'company.identifiers.cin', 'company.identifiers.isin', 'company.sector', 'company.industry', 'company.promoters',
       'offerings.intermediaries.brlms'],
   }), [v])
+  const listedFuse = useMemo(() => new Fuse((v.listed_index ?? []).map(row => ({ s: row[0], n: row[1], i: row[2], row })), { threshold: 0.3, ignoreLocation: true, keys: ['s', 'n', 'i'] }), [v])
   const hits = q ? fuse.search(q, { limit: 8 }) : []
+  const listedHits = q.trim().length > 1 ? listedFuse.search(q, { limit: 6 }).filter(h => !hits.some(x => x.item.company.identifiers.nse_symbol === h.item.s)) : []
   useEffect(() => {
     const k = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); document.getElementById('gsearch')?.focus() } }
     addEventListener('keydown', k); return () => removeEventListener('keydown', k)
@@ -483,19 +488,26 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
           value={q} onChange={e => { setQ(e.target.value); setOpen(true) }} onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           onKeyDown={e => { if (e.key === 'Enter' && hits[0]) { go(`/company/${hits[0].item.company.company_id}`); setQ('') } }} />
-        {open && q.trim().length > 1 && hits.length === 0 && (
+        {open && q.trim().length > 1 && hits.length === 0 && listedHits.length === 0 && (
           <div className="glass glass-strong absolute left-0 right-0 top-13 p-4 z-50 text-sm ink2">
             No IPO, DRHP or listing matches “{q}”.
             <a className="btn btn-primary mt-3 w-full justify-center" href={`#/new-private/${encodeURIComponent(q.trim())}`} onMouseDown={e => e.preventDefault()} onClick={() => setQ('')}>+ Add “{q.trim()}” as a private company</a>
           </div>
         )}
-        {open && hits.length > 0 && (
+        {open && (hits.length > 0 || listedHits.length > 0) && (
           <div className="glass glass-strong absolute left-0 right-0 top-13 p-2 z-50">
             {hits.map(h => (
               <a key={h.item.company.company_id} href={`#/company/${h.item.company.company_id}`} onClick={() => setQ('')}
                 className="flex justify-between gap-3 px-3 py-2 rounded-xl hover:bg-black/5 no-underline" style={{ color: 'var(--ink)' }}>
                 <span className="font-semibold">{h.item.company.name}</span>
                 <span className="muted text-sm">{h.item.custom ? 'Private · yours' : h.item.company.identifiers.nse_symbol ?? h.item.company.industry ?? ''}</span>
+              </a>
+            ))}
+            {listedHits.length > 0 && <div className="eyebrow px-3 pt-2">Listed companies</div>}
+            {listedHits.map(h => (
+              <a key={h.item.s} href={`#/listed-co/${encodeURIComponent(h.item.s)}`} onClick={() => setQ('')}
+                className="flex justify-between gap-3 px-3 py-2 rounded-xl hover:bg-black/5 no-underline" style={{ color: 'var(--ink)' }}>
+                <span className="font-semibold">{h.item.n}</span><span className="muted text-sm">NSE: {h.item.s}{h.item.row[4] != null ? ` · ₹${h.item.row[4]}` : ''}</span>
               </a>
             ))}
             <a href={`#/new-private/${encodeURIComponent(q.trim())}`} onClick={() => setQ('')} className="block px-3 py-2 rounded-xl text-sm no-underline muted hover:bg-black/5">+ Add “{q.trim()}” as a private company</a>
