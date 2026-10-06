@@ -43,8 +43,10 @@ export async function pull(cfg: SyncCfg, s: Session): Promise<{ remote: Remote |
   if (r.status === 404) return { remote: null, sha: null }
   if (!r.ok) throw explain(r.status, 'pull')
   const j = await r.json()
-  let content: string = j.content
-  if (!content) {                                   // the contents API omits the body of files over 1 MB: fetch the blob instead
+  // Always read the exact bytes via the blob API: the contents API sometimes "detects" binary files as UTF-16 text and
+  // returns a transcoded body (that is what produced "Not a user file"), and it omits bodies over 1 MB.
+  let content: string
+  {
     const bl = await gh(cfg, `/git/blobs/${j.sha}`)
     if (!bl.ok) throw explain(bl.status, 'pull')
     content = (await bl.json()).content
