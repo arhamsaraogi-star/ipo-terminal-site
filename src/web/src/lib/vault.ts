@@ -112,7 +112,7 @@ export async function changePassword(h: VaultHeader, file: AccountFile, oldPw: s
 }
 
 // ---- web-news requests: company names only, encrypted with the terminal master key so CI can read them ----
-export async function sealRequest(s: Session, names: { name: string; country?: string; symbol?: string }[]): Promise<Uint8Array> {
+export async function sealRequest(s: Session, names: { name: string; country?: string; symbol?: string; bse?: string }[]): Promise<Uint8Array> {
   const iv = crypto.getRandomValues(new Uint8Array(12))
   const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: te.encode('IPOR1') }, s.mk, te.encode(JSON.stringify({ names })))
   return new Uint8Array([...te.encode('IPOR1'), ...iv, ...new Uint8Array(ct)])

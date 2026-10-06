@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12.0 — financials pulled automatically for the stocks you follow
+- Add a stock to your portfolio or watchlist → a quick refresh starts (minutes, not the full run) → its annual P&L, balance sheet, cash flow (CFO / CFI / CFF), ratios and latest quarters are scraped from its Screener.in page and parsed (₹ crore), plus NSE annual-report links; refreshed every 12 hours; nothing is fetched for stocks you do not follow
+- The numbers replace the offer-document figures everywhere (snapshot, ratios, cash-flow card, Executive Print); your own Screener Excel upload still takes priority
+- Optional secret SCREENER_SESSION (a logged-in sessionid cookie); failures are listed on the Needs Review page and the previous data is kept
+- Refresh workflow: new "fast" input (only followed stocks, then rebuild)
+
 ## 0.11.0 — latest financials from your Screener Pro export
 - Listed company → Financials tab → Import Screener Excel: annual P&L, balance sheet, cash flow (CFO / CFI / CFF) and the latest quarters replace the IPO-time figures everywhere (snapshot, ratios, cash-flow card, Executive Print); read in the browser, kept in your encrypted account and synced across devices
 

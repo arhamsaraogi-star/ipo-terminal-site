@@ -1,7 +1,7 @@
 // Holdings, tracked companies and your own private companies live in this browser (the public repo never sees them).
 // Export / import moves them between devices.
 import type { ScreenerImport } from './screener'
-import type { CompanyRecord, Holding, ListedData, ListedPick, ListedRow, PrivateCo, Track, TrackStatus } from './types'
+import type { CompanyRecord, Fundamentals, Holding, ListedData, ListedPick, ListedRow, PrivateCo, Track, TrackStatus } from './types'
 
 export interface Pf { holdings: Holding[]; watchlist: string[]; tracking: Track[]; privates: PrivateCo[]; listed?: ListedPick[]; imports?: ScreenerImport[]; deleted?: string[] }
 const KEY = 'ipo-terminal:portfolio:v1'
@@ -102,6 +102,15 @@ export function withImport(r: CompanyRecord, imp?: ScreenerImport | null): Compa
   return { ...r, facts: { ...(r.facts ?? { financials: [], industry: [] }), financials: imp.facts, source_document: null },
     imported: { imported_at: imp.imported_at, source: 'Screener export (uploaded)', quarters: imp.quarters } }
 }
+
+/** Apply scraped fundamentals (automatic, for followed stocks). A user's own Screener upload always wins. */
+export function withFundamentals(r: CompanyRecord, f?: Fundamentals | null): CompanyRecord {
+  if (!f || !f.facts?.length || r.imported) return r
+  return { ...r, facts: { ...(r.facts ?? { financials: [], industry: [] }), financials: f.facts, source_document: null },
+    imported: { imported_at: f.fetched_at, source: `Screener.in (${f.basis}), updated automatically`, auto: true, quarters: f.quarters ?? [], ratios: f.ratios, annual_reports: f.annual_reports } }
+}
+/** The key a stock is scraped under: NSE symbol, else BSE scrip code. */
+export const stockKey = (c: CompanyRecord['company']) => c.identifiers.nse_symbol || c.identifiers.bse_code || null
 
 // ───────── already-listed companies pulled in by search ─────────
 export const listedId = (symbol: string) => `nse-${symbol.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`

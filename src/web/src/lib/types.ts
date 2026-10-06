@@ -82,8 +82,13 @@ export interface CompanyRecord {
   documents: Doc[]; events: Event[]; lockins: Lockin[]; news: News[]; market?: Market | null
   custom?: PrivateCo
   listed?: ListedData | null   // already-listed company followed by search: profile, results, announcements
-  imported?: { imported_at: string; source: string; quarters: { period_end: string; income: number | null; pat: number | null; eps: number | null }[] } | null
+  imported?: { imported_at: string; source: string; auto?: boolean; ratios?: Record<string, string>; annual_reports?: { fy: string; url: string }[]
+    quarters: { period_end: string; income: number | null; pat: number | null; eps: number | null; opm?: number | null }[] } | null
 }
+/** Scraped latest financials for a followed stock (Screener.in public page, parsed in the pipeline). */
+export interface Fundamentals { fetched_at: string; source_url: string; basis: string; name?: string | null; facts: Fact[]
+  quarters: { period_end: string; income: number | null; pat: number | null; eps: number | null; opm?: number | null }[]
+  ratios?: Record<string, string>; annual_reports?: { fy: string; url: string }[] }
 /** [symbol, name, isin, segment, close, mcap_cr, listed_on] — search-only universe of NSE-listed companies. */
 export interface ListedData {
   fetched_at: string
@@ -97,7 +102,7 @@ export interface ListedData {
 export type ListedRow = [string, string, string | null, string | null, number | null, number | null, string | null]
 export interface ListedPick { company_id: string; symbol: string; name: string; isin?: string | null; segment?: string | null; added_on: string }
 export interface Vault {
-  listed_index?: ListedRow[]; listed_data?: Record<string, ListedData>
+  listed_index?: ListedRow[]; listed_data?: Record<string, ListedData>; fundamentals?: Record<string, Fundamentals>
   meta: { built_at: string; schema_version: number; companies: number; has_sample: boolean; repo?: string | null
     ingest?: { ran_at: string; companies: number; changes: number; log: string[]; failures: string[] } | null }
   event_types: Record<string, { label: string; group: string; order: number }>

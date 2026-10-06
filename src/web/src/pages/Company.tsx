@@ -186,31 +186,37 @@ function ScreenerImportCard({ r }: { r: CompanyRecord }) {
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
   const periods = r.imported ? [...new Set((r.facts?.financials ?? []).map(f => f.period).filter(Boolean) as string[])].sort() : []
+  const followed = pf.holdings.some(h => h.company_id === id) || pf.tracking.some(t => t.company_id === id && t.status !== 'PASSED')
+  const auto = !!r.imported?.auto
+  const ratios = Object.entries(r.imported?.ratios ?? {}).filter(([k]) => ['Market Cap', 'Stock P/E', 'ROCE', 'ROE', 'Book Value', 'Dividend Yield'].includes(k))
   return (
     <Card title="Latest financials" solid>
       {r.imported ? (
         <>
-          <p className="ink2">Annual numbers below come from your Screener export{periods.length ? ` (${periods[0]}–${periods[periods.length - 1]})` : ''}, imported {fmtDate(r.imported.imported_at.slice(0, 10))}. Re-import any time to refresh.</p>
+          <p className="ink2">{auto ? `Updated automatically from Screener.in (${r.imported.source.replace(/^Screener\.in \(|\), updated automatically$/g, '')}) — last read ${fmtDateTime(r.imported.imported_at)}. It refreshes every few hours while this stock is in your portfolio or tracked.`
+            : `Annual numbers below come from your Screener export${periods.length ? ` (${periods[0]}–${periods[periods.length - 1]})` : ''}, imported ${fmtDate(r.imported.imported_at.slice(0, 10))}.`}</p>
+          {!!ratios.length && <div className="grid grid-cols-2 md:grid-cols-3 gap-3 my-3">{ratios.map(([k, v]) => <div key={k}><div className="eyebrow">{k}</div><div className="display text-[20px] font-semibold">{v}</div></div>)}</div>}
           {!!r.imported.quarters.length && (
             <Table rows={r.imported.quarters.slice(0, 8)} cols={[
               { key: 'p', label: 'Quarter ended', render: x => <b>{fmtDate(x.period_end)}</b> },
               { key: 'i', label: 'Sales (₹ cr)', right: true, render: x => (x.income != null ? num(x.income, 1) : '—') },
               { key: 'a', label: 'Net profit (₹ cr)', right: true, render: x => (x.pat != null ? num(x.pat, 1) : '—') },
+              { key: 'o', label: 'Operating margin', right: true, render: x => (x.opm != null ? `${x.opm.toFixed(1)}%` : '—') },
             ]} />)}
+          {!!r.imported.annual_reports?.length && <p className="text-sm mt-3"><b>Annual reports:</b> {r.imported.annual_reports.map((a, i) => <span key={a.fy}>{i > 0 && ' · '}<a href={a.url} target="_blank" rel="noreferrer">{a.fy} ↗</a></span>)}</p>}
         </>
+      ) : followed ? (
+        <p className="ink2">Fetching this company's annual, quarterly and cash-flow numbers — a quick refresh started when you added it, and they appear here within a few minutes. {sym ? <>Meanwhile: <a href={screenerUrl(sym)} target="_blank" rel="noreferrer">Screener ↗</a>.</> : null}</p>
       ) : (
-        <ol className="ink2 text-[15px] space-y-1 list-decimal pl-5">
-          <li>Open this company on Screener{sym ? <> — <a href={screenerUrl(sym)} target="_blank" rel="noreferrer">screener.in/company/{sym} ↗</a></> : ''} while signed in to your Pro account.</li>
-          <li>Click <b>Export to Excel</b> and save the file.</li>
-          <li>Choose that file below. Annual P&amp;L, balance sheet, cash flow (CFO / CFI / CFF) and the latest quarters replace the old IPO-time figures everywhere in the terminal.</li>
-        </ol>)}
+        <p className="ink2">Add this company to your portfolio or press Track and its latest annual, quarterly and cash-flow numbers are pulled in automatically and kept up to date.</p>
+      )}
       <div className="flex gap-2 flex-wrap items-center mt-3">
-        <label className="btn btn-primary" style={{ cursor: 'pointer' }}>{busy ? 'Reading…' : r.imported ? 'Replace Screener file' : 'Import Screener Excel'}
+        <label className="btn btn-primary" style={{ cursor: 'pointer' }}>{busy ? 'Reading…' : r.imported && !auto ? 'Replace Screener file' : 'Use my own Screener Excel instead'}
           <input type="file" accept=".xlsx" hidden onChange={e => { void pick(e.target.files?.[0]); e.target.value = '' }} /></label>
-        {r.imported && <button className="btn" onClick={() => setPf({ ...pf, imports: (pf.imports ?? []).filter(x => x.company_id !== id) })}>Remove</button>}
+        {r.imported && !auto && <button className="btn" onClick={() => setPf({ ...pf, imports: (pf.imports ?? []).filter(x => x.company_id !== id) })}>Remove</button>}
       </div>
       {err && <p className="neg text-sm mt-2">{err}</p>}
-      <p className="muted text-xs mt-3">Screener's export is for your own use under your Pro subscription; the file is read in your browser and kept only in your encrypted account.</p>
+      <p className="muted text-xs mt-3">Source: the company's public page on Screener.in, read by the refresh job only for stocks you follow. If a page cannot be read, your own Screener Pro export (Export to Excel) can be uploaded here instead and always takes priority.</p>
     </Card>
   )
 }
@@ -427,7 +433,7 @@ function FinancialsFiled({ r }: { r: CompanyRecord }) {
           { key: 'm', label: 'Metric', render: ([, l]) => <b>{l}</b> },
           ...periods.map(p => ({ key: p, label: isStub(p) ? `${p} (part-year)` : p, right: true, render: ([m]: [string, string]) => <FactValue f={byMetric.get(m)?.get(p)} /> })),
         ]} />
-        <p className="muted text-xs mt-3">{r.imported ? 'Source: your Screener export (Export to Excel). EBITDA is worked out as profit before tax + interest + depreciation − other income.' : <>Source: {src ? <a href={src.url} target="_blank" rel="noreferrer">{src.doc_type} · {fmtDate(src.filing_date)}</a> : 'offer document'} — values read from the restated summary financials and KPI tables; each figure links to its page. Values that contradicted the document's own statements were dropped rather than shown.</>}</p>
+        <p className="muted text-xs mt-3">{r.imported?.auto ? 'Source: Screener.in company page, parsed automatically (₹ crore). Operating profit is shown as EBITDA.' : r.imported ? 'Source: your Screener export (Export to Excel). EBITDA is worked out as profit before tax + interest + depreciation − other income.' : <>Source: {src ? <a href={src.url} target="_blank" rel="noreferrer">{src.doc_type} · {fmtDate(src.filing_date)}</a> : 'offer document'} — values read from the restated summary financials and KPI tables; each figure links to its page. Values that contradicted the document's own statements were dropped rather than shown.</>}</p>
       </Card>
     </div>
   )

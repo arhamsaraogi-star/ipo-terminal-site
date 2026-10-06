@@ -132,7 +132,7 @@ export async function putRequests(cfg: SyncCfg, uid: string, blob: Uint8Array) {
 /** Start a terminal refresh now (needs the token's "Actions: read and write" permission; silently skipped otherwise). */
 export async function refreshNow(cfg: SyncCfg): Promise<boolean> {
   try {
-    const r = await gh(cfg, '/actions/workflows/refresh.yml/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main' }) })
+    const r = await gh(cfg, '/actions/workflows/refresh.yml/dispatches', { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { fast: 'true' } }) })
     return r.status === 204
   } catch { return false }
 }

@@ -19,7 +19,7 @@ import AnchorDesk from './pages/AnchorDesk'
 import ExecutivePrint from './pages/ExecutivePrint'
 import { NewPrivatePage } from './pages/PrivateCo'
 import ListedCompany from './pages/ListedCompany'
-import { listedRecord, withImport, privateRecord, loadPf, savePf, takeLegacy, withTombstones, normalisePf, type Pf } from './lib/portfolio'
+import { listedRecord, stockKey, withFundamentals, withImport, privateRecord, loadPf, savePf, takeLegacy, withTombstones, normalisePf, type Pf } from './lib/portfolio'
 
 // ───────── data context ─────────
 const Ctx = createContext<Vault | null>(null)
@@ -87,18 +87,20 @@ export default function App() {
     const s = sessRef.current, c = cfgRef.current, v = vaultRef.current
     if (!s || !c || !v) return
     const p = pfRef.current
-    const byId = new Map(v.companies.map(r => [r.company.company_id, { name: r.company.name, symbol: r.company.identifiers.nse_symbol ?? undefined }]))
-    const names = [...p.privates.map(x => ({ name: x.name, country: x.country })), ...(p.listed ?? []).map(x => ({ name: x.name, symbol: x.symbol })),
-      ...[...new Set([...p.tracking.map(t => t.company_id), ...p.holdings.map(h => h.company_id)])].map(id => byId.get(id)).filter(Boolean).map(n => ({ name: n!.name, symbol: n!.symbol }))]
-    const sig = JSON.stringify(names.map(n => n.name).sort())
+    const byId = new Map(v.companies.map(r => [r.company.company_id, { name: r.company.name, symbol: r.company.identifiers.nse_symbol ?? undefined, bse: r.company.identifiers.bse_code ?? undefined }]))
+    const names: { name: string; country?: string; symbol?: string; bse?: string }[] = [...p.privates.map(x => ({ name: x.name, country: x.country })), ...(p.listed ?? []).map(x => ({ name: x.name, symbol: x.symbol })),
+      ...[...new Set([...p.tracking.map(t => t.company_id), ...p.holdings.map(h => h.company_id)])].map(id => byId.get(id)).filter(Boolean).map(n => ({ name: n!.name, symbol: n!.symbol, bse: n!.bse }))]
+    const keys = names.map(n => [n.name, n.symbol ?? '', n.bse ?? ''].join('|')).sort()
+    const sig = JSON.stringify(keys)
     const k = `ipo-terminal:req:${s.uid}`
     let prev = ''
     try { prev = localStorage.getItem(k) ?? '' } catch { /* noop */ }
     if (sig === prev) return
     try {
       if (await putRequests(c, s.uid, await sealRequest(s, names))) {
-        const prevNames: string[] = prev ? JSON.parse(prev) : []
-        if (names.some(n => !prevNames.includes(n.name))) void refreshNow(c)   // new name → fetch its news now
+        let prevKeys: string[] = []
+        try { prevKeys = prev ? JSON.parse(prev) : [] } catch { /* older format */ }
+        if (keys.some(x => !prevKeys.includes(x))) void refreshNow(c)   // a new stock (or a newly known exchange code) → fetch its financials and news now
         try { localStorage.setItem(k, sig) } catch { /* noop */ }
       }
     } catch { /* retried on the next save */ }
@@ -139,8 +141,8 @@ export default function App() {
     const tracking = pf.tracking.map(t => ({ ...t, company_id: fix(t.company_id) }))
     const imps = new Map((pf.imports ?? []).map(x => [fix(x.company_id), x]))
     return {
-      ...vault, companies: [...vault.companies.map(c => { const d = c.company.identifiers.nse_symbol ? vault.listed_data?.[c.company.identifiers.nse_symbol] : null; return withImport(d ? { ...c, listed: d } : c, imps.get(c.company.company_id)) }), ...pf.privates.map(privateRecord),
-        ...(pf.listed ?? []).filter(l => !vault.companies.some(c => c.company.identifiers.nse_symbol === l.symbol)).map(l => withImport(listedRecord(l, vault.listed_index?.find(r => r[0] === l.symbol), vault.meta.built_at.slice(0, 10), vault.listed_data?.[l.symbol]), imps.get(l.company_id)))],
+      ...vault, companies: [...vault.companies.map(c => { const d = c.company.identifiers.nse_symbol ? vault.listed_data?.[c.company.identifiers.nse_symbol] : null; const k = stockKey(c.company); return withFundamentals(withImport(d ? { ...c, listed: d } : c, imps.get(c.company.company_id)), k ? vault.fundamentals?.[k] : null) }), ...pf.privates.map(privateRecord),
+        ...(pf.listed ?? []).filter(l => !vault.companies.some(c => c.company.identifiers.nse_symbol === l.symbol)).map(l => withFundamentals(withImport(listedRecord(l, vault.listed_index?.find(r => r[0] === l.symbol), vault.meta.built_at.slice(0, 10), vault.listed_data?.[l.symbol]), imps.get(l.company_id)), vault.fundamentals?.[l.symbol]))],
       portfolio: { holdings: pf.holdings.map(h => ({ ...h, company_id: fix(h.company_id) })), tracking, privates: pf.privates,
         watchlist: tracking.filter(t => t.status !== 'PASSED').map(t => t.company_id) },
     }

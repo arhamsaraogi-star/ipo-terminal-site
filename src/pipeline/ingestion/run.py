@@ -823,13 +823,20 @@ def main(argv=None) -> int:
         ingest_news(st, nse, a.news_companies)
     if "intel" not in skip and os.environ.get("TERMINAL_PASSPHRASE"):
         print('▶ web news for requested companies', flush=True)
+        from pipeline.ingestion import fundamentals, listed_intel, private_intel
+        code = os.environ["TERMINAL_PASSPHRASE"]
+        reqs: list[dict] = []
         try:
-            from pipeline.ingestion import private_intel
-            private_intel.update(Client(min_interval=1.0), os.environ["TERMINAL_PASSPHRASE"], st.log)
-            from pipeline.ingestion import listed_intel
-            listed_intel.update(nse, private_intel.read_requests(os.environ["TERMINAL_PASSPHRASE"]), st.log, classify_news, budget_ok=lambda: not out_of_time(0.95))
+            reqs = private_intel.read_requests(code)
         except Exception as e:  # noqa: BLE001 — never fatal
-            st.failures.append(f"web news: {str(e)[:120]}")
+            st.failures.append(f"requests: {str(e)[:100]}")
+        for label, step in (("web news", lambda: private_intel.update(Client(min_interval=1.0), code, st.log)),
+                            ("listed data", lambda: listed_intel.update(nse, reqs, st.log, classify_news, budget_ok=lambda: not out_of_time(0.95))),
+                            ("fundamentals", lambda: fundamentals.update(Client(min_interval=1.0), reqs, st.log, nse, budget_ok=lambda: not out_of_time(0.97)))):
+            try:                       # one step failing never blocks the others
+                step()
+            except Exception as e:  # noqa: BLE001
+                st.failures.append(f"{label}: {str(e)[:120]}")
 
     changes = diff_changes(st)
     for b in st.bundles.values():

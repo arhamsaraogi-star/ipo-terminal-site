@@ -53,7 +53,8 @@ def read_requests(access_code: str) -> list[dict]:
             if len(n) >= 2:
                 sym = str(it.get("symbol") or "").strip().upper()
                 seen.setdefault(key_of(n), {"name": n, "country": str(it.get("country") or "")[:40],
-                                            "symbol": sym if re.fullmatch(r"[A-Z0-9&-]{1,20}", sym) else None})
+                                            "symbol": sym if re.fullmatch(r"[A-Z0-9&-]{1,20}", sym) else None,
+                                            "bse": str(it.get("bse")) if re.fullmatch(r"\d{5,7}", str(it.get("bse") or "")) else None})
     return list(seen.values())
 
 

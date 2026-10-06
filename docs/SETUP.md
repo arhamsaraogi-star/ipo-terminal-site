@@ -15,3 +15,7 @@ Everything runs from the **public** repo `ipo-terminal-site`. The private `ipo-t
 Live at `https://arhamsaraogi-star.github.io/ipo-terminal-site/`. After that it refreshes every 15 minutes on its own; an open terminal updates in place.
 
 Public repos get unlimited free Actions minutes, which is what makes the 15-minute cadence possible.
+
+
+## Optional: Screener session
+Followed stocks' financials are read from their public Screener.in pages. If Screener asks for a login, add a repository secret `SCREENER_SESSION` containing the `sessionid` cookie of a signed-in Screener account. Without it the public pages are used.

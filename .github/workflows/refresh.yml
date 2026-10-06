@@ -10,6 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       full: { description: "Full sweep (all news, larger PDF budget)", type: boolean, default: false }
+      fast: { description: "Fast: only the stocks members follow (financials, news, prices), then rebuild", type: boolean, default: false }
   push:
     branches: [main]
     paths: ["src/**", "rules/**", "schemas/**", "config/**", ".github/workflows/refresh.yml"]
@@ -30,6 +31,7 @@ jobs:
     env:
       TERMINAL_PASSPHRASE: ${{ secrets.TERMINAL_PASSPHRASE }}
       SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }}
+      SCREENER_SESSION: ${{ secrets.SCREENER_SESSION }}   # optional: a logged-in Screener sessionid cookie
       PYTHONPATH: src
       DOC_WORKERS: "6"
     steps:
@@ -57,11 +59,12 @@ jobs:
           ls data/requests | wc -l
       - name: Ingest SEBI + NSE (Mainboard and SME)
         env:
-          FULL: ${{ inputs.full == true || steps.state.outputs.fresh == 'true' || github.event_name == 'push' || github.event.schedule == '0 19-23 * * *' }}
+          FULL: ${{ inputs.fast != true && (inputs.full == true || steps.state.outputs.fresh == 'true' || github.event_name == 'push' || github.event.schedule == '0 19-23 * * *') }}
         run: |
           ARGS="--days 183"
           [ "${{ steps.state.outputs.fresh }}" = "true" ] && ARGS="$ARGS --backfill"
-          if [ "$FULL" = "true" ]; then ARGS="$ARGS --news-companies 400 --cover-budget 2000 --pdf-budget 600 --max-minutes 110"
+          if [ "${{ inputs.fast }}" = "true" ]; then ARGS="$ARGS --skip sebi,offerdocs,issues,bse,market,covers,news --max-minutes 8"
+          elif [ "$FULL" = "true" ]; then ARGS="$ARGS --news-companies 400 --cover-budget 2000 --pdf-budget 600 --max-minutes 110"
           else ARGS="$ARGS --news-companies 60 --cover-budget 400 --pdf-budget 60 --max-minutes 12"; fi
           python -m pipeline.ingestion.run $ARGS
       - name: Validation gate
