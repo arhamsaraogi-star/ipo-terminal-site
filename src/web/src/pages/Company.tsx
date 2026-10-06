@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { screenerUrl } from '../lib/portfolio'
+import { finModel, fmtFin } from '../lib/fin'
 import { Area, AreaChart, Bar, CartesianGrid, ComposedChart, Legend, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { usePf, useVault } from '../App'
 import { Card, Delta, FactValue, Pill, Seg, SourceLine, Stage, Table } from '../components/ui'
@@ -285,7 +286,39 @@ export const FIN_ORDER: [string, string][] = [
   ['eps_basic', 'EPS (basic, ₹)'], ['eps_diluted', 'EPS (diluted, ₹)'], ['net_worth', 'Net worth'], ['equity_share_capital', 'Equity share capital'],
   ['total_borrowings', 'Borrowings'], ['net_debt', 'Net debt'], ['cash_and_equivalents', 'Cash & equivalents'], ['total_assets', 'Total assets'],
   ['debt_equity', 'Debt / equity (x)'], ['roe', 'ROE'], ['ronw', 'Return on net worth'], ['roce', 'ROCE'], ['nav_per_share', 'NAV per share (₹)'],
+  ['finance_cost', 'Finance costs'], ['current_liabilities', 'Current liabilities'],
 ]
+function CashFlowCard({ r }: { r: CompanyRecord }) {
+  const m = finModel(r)
+  const rows = m.rows.filter(x => x.group === 'Cash flow')
+  if (!rows.length) return null
+  const chart = m.periods.map((p, i) => ({ p: isStub(p) ? `${p}*` : p, 'Operations (CFO)': m.row('cfo')?.values[i] ?? null, 'Investing (CFI)': m.row('cfi')?.values[i] ?? null, 'Financing (CFF)': m.row('cff')?.values[i] ?? null, 'Free cash flow': m.row('fcf')?.values[i] ?? null }))
+  return (
+    <Card title="Cash flow (₹ crore)" solid>
+      {(m.row('cfo') || m.row('cfi') || m.row('cff')) && <div style={{ height: 260 }}>
+        <ResponsiveContainer>
+          <ComposedChart data={chart} margin={{ top: 10, right: 6, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--hairline)" vertical={false} />
+            <XAxis dataKey="p" tick={{ fill: 'var(--ink-3)', fontSize: 12 }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fill: 'var(--ink-3)', fontSize: 11 }} axisLine={false} tickLine={false} width={56} tickFormatter={x => num(x)} />
+            <Tooltip contentStyle={{ background: 'var(--glass-solid)', border: '1px solid var(--hairline)', borderRadius: 12 }} formatter={(x, n) => [crore(Number(x), 1), n]} />
+            <Legend />
+            <Bar dataKey="Operations (CFO)" fill="#34c77b" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="Investing (CFI)" fill="#ff9f0a" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="Financing (CFF)" fill="#0a84ff" radius={[4, 4, 0, 0]} />
+            <Line dataKey="Free cash flow" stroke="#b07cff" strokeWidth={2.5} dot={{ r: 4 }} connectNulls />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>}
+      <Table wide rows={rows} cols={[
+        { key: 'l', label: 'Item', render: x => <div><b>{x.label}</b><div className="muted text-xs">{x.hint}</div></div> },
+        ...m.periods.map((p, i) => ({ key: p, label: isStub(p) ? `${p} (part-year)` : p, right: true, render: (x: typeof rows[number]) => <span>{fmtFin(x.values[i], x.unit)}{x.calc && x.values[i] != null ? ' †' : ''}</span> })),
+      ]} />
+      <p className="muted text-xs mt-3">Brackets = cash going out. † calculated here: {[...new Set(rows.filter(x => x.calc).map(x => `${x.label} = ${x.calc}`))].join('; ') || 'none'}.</p>
+    </Card>
+  )
+}
+
 function Financials({ r }: { r: CompanyRecord }) {
   if (r.company.external) return <ListedKeyData r={r} />
   const { periods, byMetric } = finTable(r)
@@ -319,6 +352,7 @@ function Financials({ r }: { r: CompanyRecord }) {
         </div>
         <p className="muted text-xs">₹ crore. * = part-year (stub) period. Margins are as printed in the document, or calculated where not printed.</p>
       </Card>
+      <CashFlowCard r={r} />
       <Card title="Restated financials (₹ crore unless stated)" solid>
         <Table wide rows={FIN_ORDER.filter(([m]) => byMetric.has(m))} cols={[
           { key: 'm', label: 'Metric', render: ([, l]) => <b>{l}</b> },

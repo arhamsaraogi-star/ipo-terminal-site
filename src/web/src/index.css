@@ -267,3 +267,11 @@ body {
   .ex-orn { font-size: 16pt; } .ex-tag { font-size: 15pt; } .ex-date { font-size: 17pt; }
 }
 @media print { div:has(> main.page) > :not(main.page):not(aside) { display: none !important; } }
+.ex-tiles4 { grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.ex-tiles4 .ex-tile { box-shadow: 4px 4px 0 #000; border-width: 3px; padding: 8px 6px 10px; }
+.ex-tiles4 .ex-tile b { font-size: 34px; } .ex-tiles4 .ex-tile span { font-size: 14px; } .ex-tile em { display: block; font-size: 13px; font-style: normal; margin-top: 2px; }
+.ex-hint { font-weight: 400; font-size: 13px; color: #333; font-style: italic; }
+.ex-gloss { display: grid; grid-template-columns: 1fr; gap: 6px; } .ex-gloss dt { font-weight: 800; display: inline; } .ex-gloss dd { display: inline; margin: 0 0 0 6px; }
+.ex-newsco h3 { margin-top: 16px; }
+@media print { .ex-tiles4 .ex-tile b { font-size: 24pt; } .ex-tiles4 .ex-tile span { font-size: 10.5pt; } .ex-tile em { font-size: 9.5pt; } .ex-hint { font-size: 9.5pt; } }
+@media (max-width: 640px) { .ex-tiles4 { grid-template-columns: 1fr 1fr; } }

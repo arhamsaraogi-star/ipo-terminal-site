@@ -833,7 +833,7 @@ def download(client: Client, url: str) -> bytes:
     raise SourceError(f"{url}: truncated download ({len(blob)} of {want} bytes)")
 
 
-DOC_VERSION = "doc/4"
+DOC_VERSION = "doc/5"   # 5: cash-flow lines (CFO / CFI / CFF / capex), finance costs, current liabilities
 DOC_ORDER = {"PROSPECTUS": 0, "RHP": 1, "UDRHP": 2, "DRHP": 3}
 
 
@@ -880,6 +880,9 @@ def extract_documents(st: State, client: Client, budget: int, minutes: float = 3
         if ex.get("status") == "ok" and ex.get("extractor") == DOC_VERSION:
             continue
         stage = b.company["lifecycle"]
+        if ex.get("status") == "ok" and stage in ("LISTED", "WITHDRAWN") and not any(
+                e["event_type"] == "LISTING" and e["date"] >= (TODAY - timedelta(days=120)).isoformat() for e in b.events):
+            continue                                     # a version bump never re-reads long-listed or withdrawn issues
         filed = max([e["date"] for e in b.events if e["event_type"] in ("DRHP_FILED", "UDRHP_FILED", "RHP_FILED", "PROSPECTUS_FILED")] or ["0000"])
         urgent = stage in ("ISSUE_OPEN", "ISSUE_ANNOUNCED", "ISSUE_CLOSED", "RHP_FILED", "LISTED") or (TODAY - date.fromisoformat(filed)).days <= 14 if filed != "0000" else False
         never = ex.get("status") != "ok"                 # never read (e.g. new BSE SME filings) beats a re-read

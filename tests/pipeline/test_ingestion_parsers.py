@@ -122,3 +122,16 @@ def test_listed_company_parsers():
     assert r[0]["period_end"] == "2026-06-30" and r[0]["income"] == 2500.0 and r[0]["pat"] == 180.0
     a = L.parse_announcements("X", [{"sort_date": "2026-10-05 10:00:00", "desc": "Board Meeting", "attchmntText": "Outcome of meeting", "seq_id": "7"}], lambda t: "board_meeting")
     assert a[0]["id"] == "7" and a[0]["category"] == "board_meeting"
+
+
+def test_cash_flow_labels_are_recognised():
+    from pipeline.extraction.offer_doc import METRIC_RE
+    def metric(label):
+        return next((m for m, rx, _ in METRIC_RE if rx.search(label)), None)
+    assert metric("Net cash flow from/(used in) operating activities (A)") == "cfo"
+    assert metric("Net cash (used in)/generated from investing activities") == "cfi"
+    assert metric("Net cash generated from financing activities") == "cff"
+    assert metric("Purchase of property, plant and equipment and intangible assets") == "capex"
+    assert metric("Finance costs") == "finance_cost"
+    assert metric("Total current liabilities") == "current_liabilities"
+    assert metric("Cash and cash equivalents at the end of the year") == "cash_and_equivalents"

@@ -40,6 +40,13 @@ METRICS: list[tuple[str, str, str]] = [
     ("roce", r"return\s+on\s+(average\s+)?capital\s+employed|^roce\b", "pct"),
     ("debt_equity", r"debt\s*[-/]?\s*(to\s*)?[-/]?\s*equity", "ratio"),
     ("revenue_growth", r"revenue.*growth|growth.*revenue", "pct"),
+    # cash flow (net cash from / (used in) operating, investing, financing) and what is needed to derive free cash flow
+    ("cfo", r"^(net\s+)?cash\b(?!.*(equivalent|balance)).*\boperating\s+activit", "money"),
+    ("cfi", r"^(net\s+)?cash\b(?!.*(equivalent|balance)).*\binvesting\s+activit", "money"),
+    ("cff", r"^(net\s+)?cash\b(?!.*(equivalent|balance)).*\bfinancing\s+activit", "money"),
+    ("capex", r"^(payments?\s+(for|towards)\s+|purchase\s+of\s+|acquisition\s+of\s+|addition(s)?\s+to\s+)(the\s+)?(property,?\s+plant|fixed\s+assets|tangible|intangible|pp&e|capital\s+assets|plant)|^capital\s+expenditure|^capex\b", "money"),
+    ("finance_cost", r"^finance\s+costs?\b", "money"),
+    ("current_liabilities", r"^total\s+current\s+liabilities\b", "money"),
 ]
 METRIC_RE = [(m, re.compile(p, re.I), k) for m, p, k in METRICS]
 LABELS = {
@@ -49,8 +56,10 @@ LABELS = {
     "equity_share_capital": "Equity share capital", "cash_and_equivalents": "Cash & equivalents", "total_assets": "Total assets",
     "eps_basic": "EPS (basic)", "eps_diluted": "EPS (diluted)", "nav_per_share": "NAV per share", "ronw": "Return on net worth",
     "roe": "Return on equity", "roce": "ROCE", "debt_equity": "Debt / equity", "revenue_growth": "Revenue growth", "pat_growth": "PAT growth",
+    "cfo": "Cash flow from operations", "cfi": "Cash flow from investing", "cff": "Cash flow from financing", "capex": "Capital expenditure (purchase of fixed assets)",
+    "finance_cost": "Finance costs", "current_liabilities": "Current liabilities",
 }
-KW = re.compile(r"revenue from operations|ebitda|profit after tax|net worth|total borrowings|earnings per share|restated profit|roce|return on", re.I)
+KW = re.compile(r"revenue from operations|ebitda|profit after tax|net worth|total borrowings|earnings per share|restated profit|roce|return on|operating activities|investing activities|financing activities", re.I)
 UNIT_CR = {"million": 0.1, "millions": 0.1, "mn": 0.1, "lakh": 0.01, "lakhs": 0.01, "lacs": 0.01, "lac": 0.01,
            "crore": 1.0, "crores": 1.0, "cr": 1.0, "billion": 100.0, "bn": 100.0}
 UNIT_RE = re.compile(r"(?:₹|rs\.?|inr)\s*(?:in\s+)?(million|millions|mn|lakhs?|lacs?|crores?|cr|billion|bn)\b|in\s+(?:₹|rs\.?|inr)\s*(million|millions|mn|lakhs?|lacs?|crores?|cr|billion|bn)\b|\((?:₹|rs\.?|inr)\s*(million|lakhs?|lacs?|crores?)\)", re.I)
