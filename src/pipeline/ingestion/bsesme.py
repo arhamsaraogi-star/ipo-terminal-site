@@ -68,14 +68,58 @@ def parse(page: str) -> list[dict]:
     return out
 
 
+READER = "https://r.jina.ai/"          # public page-to-text relay: fetches the page from its own network
+FOLDER = {"SME_IPO InPrinciple": "drhp", "SME_IPO Open": "rhp", "SME_IPO BasisOfAllotment": "prospectus", "ipo_T5": "allotment_ad"}
+
+
+def parse_reader(text: str) -> list[dict]:
+    """Same table, as returned by the reader relay: one line per issuer — [Name](...)[dd/mm/yyyy](drhp-url)[img](rhp-url)…"""
+    from urllib.parse import unquote
+    out = []
+    for line in text.splitlines():
+        m = re.match(r"\[([^\]]+)\]\([^)]*SMEIPODRHP[^)]*\)(.*)$", line.strip())
+        if not m:
+            continue
+        rec: dict = {"name": re.sub(r"\s+", " ", m.group(1)).strip()}
+        for label, url in re.findall(r"\[((?:[^\[\]]|\[[^\]]*\])*)\]\((https?://[^)\s]+/download/[^)\s]+)\)", m.group(2)):
+            folder = unquote(url).split("/download/", 1)[1].split("/")[1] if "/download/" in url else ""
+            key = FOLDER.get(folder)
+            if not key or key in rec:
+                continue
+            dm = re.match(r"(\d{2})/(\d{2})/(\d{4})$", label.strip())
+            d = f"{dm.group(3)}-{dm.group(2)}-{dm.group(1)}" if dm else None
+            u = mirror(url)
+            rec[key] = {"url": u, "date": d or _stamp(u)}
+        if len(rec) > 1:
+            out.append(rec)
+    return out
+
+
 def fetch(client) -> list[dict]:
     last = None
-    for url in (URL, URL.replace("https://www.", "https://"), URL.replace("https://", "http://")):
+    import requests
+    for url in (URL,):
         try:
-            r = client.request("GET", url, headers={"Referer": BASE + "/"})
+            r = requests.get(url, timeout=(8, 40), headers={"Referer": BASE + "/", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/128 Safari/537.36"})
             rows = parse(r.text)
             if rows:
                 return rows
         except Exception as e:  # noqa: BLE001
             last = e
+    # bsesme.com refuses connections from cloud runners → read it through the relay
+    try:
+        r = None
+        for _ in range(3):
+            r = requests.get(READER + URL, timeout=90, headers={"User-Agent": "curl/8.5", "Accept": "*/*"})
+            if r.status_code == 200:
+                break
+            import time
+            time.sleep(5)
+        if r is None or r.status_code != 200:
+            raise RuntimeError(f"reader relay HTTP {getattr(r, 'status_code', '?')}")
+        rows = parse_reader(r.text)
+        if rows:
+            return rows
+    except Exception as e:  # noqa: BLE001
+        last = e
     raise last or RuntimeError("BSE SME offer-document page returned no rows")

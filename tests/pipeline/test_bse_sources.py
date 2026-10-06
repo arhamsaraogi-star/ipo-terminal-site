@@ -42,3 +42,14 @@ def test_bsesme_drhp_table():
     assert rows[0]["drhp"] == {"url": "https://www.bseindia.com/corporates/download/332642/SME_IPO%20InPrinciple/DRHP_LGC_BSE_30092026_Final_20261001002056.pdf", "date": "2026-10-01"}
     r = rows[2]
     assert r["rhp"]["date"] == "2026-09-15" and r["prospectus"]["date"] == "2026-09-24" and r["drhp"]["date"] == "2026-07-24"
+
+
+def test_bsesme_reader_relay():
+    from pathlib import Path
+    from pipeline.ingestion import bsesme
+    rows = bsesme.parse_reader((Path(__file__).resolve().parents[1] / "fixtures" / "bsesme_drhp_reader.md").read_text())
+    assert len(rows) > 500
+    assert rows[0]["name"] == "LGC Engineering Limited" and rows[0]["drhp"]["date"] == "2026-10-01"
+    assert rows[0]["drhp"]["url"].startswith("https://www.bseindia.com/corporates/download/332642/")
+    r = next(x for x in rows if x["name"].startswith("ROBOKIDZ"))
+    assert r["drhp"]["date"] == "2026-07-24" and r["rhp"]["date"] == "2026-09-15" and r["prospectus"]["date"] == "2026-09-24"

@@ -1,7 +1,7 @@
 # Changelog
 
 ## 0.7.0 — 2026-10-06 · BSE SME documents read, phone layout, anchor intelligence
-- BSE SME offer documents downloaded via the bseindia.com mirror (bsesme.com blocks cloud runners); every document re-read (doc/4), never-read documents first, 6 parallel workers
+- BSE SME filing list read through a page-reader relay when bsesme.com refuses the runner; documents downloaded via the bseindia.com mirror; every document re-read (doc/4), never-read documents first, 6 parallel workers
 - SME cover pages: lead manager / registrar parsed when the name follows the contact details; company summary from SME "Our Business" chapters
 - Phone layout: compact two-line rows (title + key figure + meta line), wide tables scroll with a sticky first column, scrollable tabs, smaller headings
 - Anchor scorecard: what anchors actually earned (issue → day-30 / day-90 unlocks) by deal and by lead manager
