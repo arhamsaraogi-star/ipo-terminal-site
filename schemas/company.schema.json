@@ -216,6 +216,13 @@
         "null"
       ],
       "description": "withdrawn / postponed / cancelled when the exchange marks the issue so"
+    },
+    "exchange_listed": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "BSE / NSE when the company was found trading on an exchange's daily file but no listing date is known"
     }
   }
 }

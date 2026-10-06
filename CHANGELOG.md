@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.1 — listed means listed
+- A company found on an exchange's daily file (NSE equity list for any listing date; BSE bhavcopy for BSE-only issues with an RHP or prospectus) is marked Listed instead of staying at "RHP filed" with its old offer-document data
+- Tracked or held listed companies show a "Latest data (NSE)" card (price, 52-week range, P/E, latest quarterly results) above the offer-document financials; announcements feed their news
+
 ## 0.10.0 — Executive Print rework, cash flow
 - Executive Print: news on your tracked companies comes first; the full business overview (no cutting); a "the numbers" section per company in plain words with revenue and growth, EBITDA and margin, PAT and margin, ROE, ROCE, debt, CFO / CFI / CFF, capex, free cash flow and estimated FCFF, charts and a reading guide
 - Cash-flow lines (CFO, CFI, CFF, capex), finance costs and current liabilities are now read from offer documents (extractor doc/5: pipeline and recent filings are re-read; long-listed issues are left as they are); Financials tab gets a Cash flow card

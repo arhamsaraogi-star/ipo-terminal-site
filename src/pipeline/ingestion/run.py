@@ -593,7 +593,7 @@ def enrich_from_equity_lists(st: State, client: Client, since: date) -> None:
             ids["isin"] = rec["isin"]
         if b.company.get("segment") == "UNKNOWN":
             b.company["segment"] = rec["segment"]
-        if rec.get("listed_on") and rec["listed_on"] >= since.isoformat() and rec["listed_on"] <= TODAY.isoformat():
+        if rec.get("listed_on") and rec["listed_on"] <= TODAY.isoformat():   # any date: an issue from 2024 is listed too, not "RHP filed"
             upsert_event(b, "LISTING", rec["listed_on"], "actual", src("EXCHANGE_ISSUE_PAGE", "https://www.nseindia.com/market-data/securities-available-for-trading"))
         n += 1
     st.log.append(f"NSE equity lists: {len(lists)} securities, {n} tracked companies enriched")
@@ -620,10 +620,16 @@ def update_market(st: State, client: Client) -> None:
         lds = [e["date"] for e in b.events if e["event_type"] == "LISTING" and e["date_kind"] != "derived" and e["date"] <= TODAY.isoformat()]
         if not ids.get("nse_symbol") and lds:
             wanted[cid] = {"name": b.company["name"], "isin": ids.get("isin"), "listing": min(lds)}
+        elif not ids.get("nse_symbol") and not b.company.get("exchange_listed") and b.company["lifecycle"] not in ("WITHDRAWN", "LISTED") \
+                and any(e["event_type"] in ("RHP_FILED", "PROSPECTUS_FILED") and e["date"] <= TODAY.isoformat() for e in b.events):
+            wanted[cid] = {"name": b.company["name"], "isin": ids.get("isin"), "listing": None}   # an RHP / prospectus exists: is it trading?
     if wanted:
         try:
             for cid, code in M.update_bse(client, wanted, budget_ok=lambda: not out_of_time(0.6), log=st.log.append).items():
                 st.bundles[cid].company["identifiers"]["bse_code"] = code
+                if not any(e["event_type"] == "LISTING" and e["date_kind"] != "derived" for e in st.bundles[cid].events):
+                    st.bundles[cid].company["exchange_listed"] = "BSE"       # trading on BSE, listing date unknown
+                    st.bundles[cid].company["lifecycle"] = lifecycle(st.bundles[cid])
         except Exception as e:  # noqa: BLE001
             st.failures.append(f"BSE prices: {e}")
 
@@ -642,6 +648,8 @@ def lifecycle(b: CompanyBundle) -> str:
         return "WITHDRAWN"
     if b.company.get("issue_status") in ("withdrawn", "cancelled", "postponed") and not any(e["event_type"] == "LISTING" and e["date"] <= TODAY.isoformat() for e in b.events):
         return "WITHDRAWN"
+    if b.company.get("exchange_listed"):
+        return "LISTED"                      # found on an exchange's daily file: listed, whatever the filings say
     t = TODAY.isoformat()
     ev = {}
     for e in b.events:

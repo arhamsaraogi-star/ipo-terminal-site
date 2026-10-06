@@ -173,7 +173,7 @@ function ListedKeyData({ r }: { r: CompanyRecord }) {
   const rng = p?.low_52w != null && p?.high_52w != null && p?.price != null ? Math.max(0, Math.min(100, ((p.price - p.low_52w) / (p.high_52w - p.low_52w || 1)) * 100)) : null
   return (
     <div className="space-y-5">
-      <Card title="Key data" solid>
+      <Card title={r.company.external ? 'Key data' : 'Latest data (NSE)'} solid>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <M label="52-week range">{p?.low_52w != null ? `${inr(p.low_52w)} – ${inr(p.high_52w)}` : '—'}</M>
           <M label="P/E" sub={p?.sector_pe != null ? `sector ${p.sector_pe.toFixed(1)}` : undefined}>{p?.pe != null ? p.pe.toFixed(1) : '—'}</M>
@@ -185,7 +185,7 @@ function ListedKeyData({ r }: { r: CompanyRecord }) {
         <p className="muted text-xs mt-3">From NSE, refreshed every few hours{d.fetched_at ? ` · last ${fmtDateTime(d.fetched_at)}` : ''}. For deeper numbers, open Screener (button above).</p>
       </Card>
       {!!d.results?.length && (
-        <Card title="Quarterly results (₹ crore)" solid>
+        <Card title="Latest quarterly results (₹ crore)" solid>
           <Table rows={d.results} cols={[
             { key: 'p', label: 'Quarter ended', render: x => <b>{fmtDate(x.period_end)}</b> },
             { key: 'i', label: 'Income', right: true, render: x => x.income != null ? num(x.income, 1) : '—' },
@@ -209,7 +209,7 @@ function Overview({ r }: { r: CompanyRecord }) {
         </Card>
       )}
       <PriceChart r={r} />
-      {r.company.external && <ListedKeyData r={r} />}
+      {r.listed && <ListedKeyData r={r} />}
       {!r.company.external && <AnchorCard r={r} />}
       {!r.company.external && <div className="grid xl:grid-cols-2 gap-5">
         <DealTeam r={r} />
@@ -321,6 +321,10 @@ function CashFlowCard({ r }: { r: CompanyRecord }) {
 
 function Financials({ r }: { r: CompanyRecord }) {
   if (r.company.external) return <ListedKeyData r={r} />
+  if (r.listed) return <div className="space-y-5"><ListedKeyData r={r} /><FinancialsFiled r={r} /></div>
+  return <FinancialsFiled r={r} />
+}
+function FinancialsFiled({ r }: { r: CompanyRecord }) {
   const { periods, byMetric } = finTable(r)
   if (!periods.length) {
     const queued = r.documents.some(d => ['DRHP', 'RHP', 'PROSPECTUS', 'UDRHP'].includes(d.doc_type) && /\.(pdf|zip)$/i.test(d.url))

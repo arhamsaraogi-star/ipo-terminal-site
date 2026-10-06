@@ -139,3 +139,13 @@ def test_cash_flow_labels_are_recognised():
     assert metric("Finance costs") == "finance_cost"
     assert metric("Total current liabilities") == "current_liabilities"
     assert metric("Cash and cash equivalents at the end of the year") == "cash_and_equivalents"
+
+
+def test_company_found_trading_is_listed_even_without_listing_event():
+    from pipeline.common.store import CompanyBundle
+    from pipeline.ingestion import run as R
+    b = CompanyBundle(company={"company_id": "yash", "name": "Yash Highvoltage Limited", "lifecycle": "RHP_FILED", "exchange_listed": "BSE"},
+                      events=[{"event_type": "RHP_FILED", "date": "2024-12-10", "date_kind": "actual"}])
+    assert R.lifecycle(b) == "LISTED"
+    b.company.pop("exchange_listed")
+    assert R.lifecycle(b) == "RHP_FILED"
