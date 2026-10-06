@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.0 — latest financials from your Screener Pro export
+- Listed company → Financials tab → Import Screener Excel: annual P&L, balance sheet, cash flow (CFO / CFI / CFF) and the latest quarters replace the IPO-time figures everywhere (snapshot, ratios, cash-flow card, Executive Print); read in the browser, kept in your encrypted account and synced across devices
+
 ## 0.10.3 — listed from the prospectus, honest IPO-vintage labels
 - A company whose final prospectus was filed 3+ weeks ago is Listed, even when no exchange file match is found
 - Older issues the exchange files could not place are listed on the Needs Review page, so unmatched names are visible
