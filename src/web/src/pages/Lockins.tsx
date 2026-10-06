@@ -24,7 +24,7 @@ export default function Lockins() {
       </div>
       <Card solid title={`${rows.length} tranches`} action={<Seg value={band} onChange={setBand} options={BANDS} />}>
         <Table rows={rows} onRow={x => go(`/company/${x.r.company.company_id}`)} cols={[
-          { key: 'd', label: 'Expiry', render: x => <b>{fmtDate(x.l.expiry_date)}</b>, sort: x => x.l.expiry_date },
+          { key: 'd', label: 'Expiry', m: 'key', render: x => <b>{fmtDate(x.l.expiry_date)}</b>, sort: x => x.l.expiry_date },
           { key: 'r', label: 'Days', right: true, render: x => { const u = urgency(x.d); return <Pill tone={u.tone}>{x.d < 0 ? 'Expired' : `${x.d}d`}</Pill> }, sort: x => x.d },
           { key: 'c', label: 'Company', render: x => <span>{isHeld(v, x.r.company.company_id) && <span style={{ color: '#f5a623' }}>★ </span>}{x.r.company.name}</span>, sort: x => x.r.company.name },
           { key: 'h', label: 'Holder', render: x => holder(x.l.holder_category) },

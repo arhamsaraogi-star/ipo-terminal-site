@@ -39,6 +39,6 @@ def test_bsesme_drhp_table():
     from pipeline.ingestion import bsesme
     rows = bsesme.parse((Path(__file__).resolve().parents[1] / "fixtures" / "bsesme_drhp.html").read_text())
     assert [r["name"] for r in rows] == ["LGC Engineering Limited", "S.R.G. NARROW FAB LIMITED", "ROBOKIDZ EDUVENTURES LIMITED"]
-    assert rows[0]["drhp"] == {"url": "https://www.bsesme.com/download/332642/SME_IPO%20InPrinciple/DRHP_LGC_BSE_30092026_Final_20261001002056.pdf", "date": "2026-10-01"}
+    assert rows[0]["drhp"] == {"url": "https://www.bseindia.com/corporates/download/332642/SME_IPO%20InPrinciple/DRHP_LGC_BSE_30092026_Final_20261001002056.pdf", "date": "2026-10-01"}
     r = rows[2]
     assert r["rhp"]["date"] == "2026-09-15" and r["prospectus"]["date"] == "2026-09-24" and r["drhp"]["date"] == "2026-07-24"

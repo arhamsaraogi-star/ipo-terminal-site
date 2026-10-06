@@ -1,4 +1,5 @@
 import { useVault, go } from '../App'
+import { SinceLastVisit } from '../components/Insights'
 import { Card, Delta, Kpi, Pill, Stage, Table } from '../components/ui'
 import { allLockins, cmp, eventDate, ipo, issuePrice, issueSize, listedOn, listingGainPct, priceBand, returnVsIssuePct, upcomingEvents, inScope, isHeld } from '../lib/derive'
 import { crore, daysUntil, fmtDate, fmtDateTime, inr, pct, urgency } from '../lib/format'
@@ -27,6 +28,7 @@ export default function Dashboard() {
         <div className="flex gap-2 flex-wrap"><a className="btn" href="#/new-private/">+ Private company</a><a className="btn btn-primary" href="#/portfolio">Portfolio →</a></div>
       </div>
 
+      <SinceLastVisit />
       {has ? (
         <section className="space-y-4">
           <ReturnsStrip />
@@ -63,8 +65,8 @@ export default function Dashboard() {
           <Table rows={opens14.slice(0, 10)} empty="No scheduled IPO milestones in the next 14 days"
             onRow={x => go(`/company/${x.r.company.company_id}`)}
             cols={[
-              { key: 'd', label: 'Date', render: x => <b>{fmtDate(x.e.date, false)}</b>, sort: x => x.e.date },
-              { key: 'c', label: 'Company', render: x => x.r.company.name },
+              { key: 'd', label: 'Date', m: 'key', render: x => <b>{fmtDate(x.e.date, false)}</b>, sort: x => x.e.date },
+              { key: 'c', label: 'Company', primary: true, render: x => x.r.company.name },
               { key: 'e', label: 'Milestone', render: x => v.event_types[x.e.event_type]?.label ?? x.e.event_type },
               { key: 'in', label: 'In', hideMobile: true, right: true, render: x => x.d === 0 ? <Pill tone="green">Today</Pill> : `${x.d}d` },
             ]} />
@@ -73,8 +75,8 @@ export default function Dashboard() {
           <Table rows={allLockins(v).filter(x => x.d >= 0).slice(0, 6)} empty="No upcoming lock-in expiries"
             onRow={x => go(`/company/${x.r.company.company_id}`)}
             cols={[
-              { key: 'd', label: 'Expiry', render: x => <b>{fmtDate(x.l.expiry_date, false)}</b> },
-              { key: 'c', label: 'Company', render: x => x.r.company.name },
+              { key: 'd', label: 'Expiry', m: 'key', render: x => <b>{fmtDate(x.l.expiry_date, false)}</b> },
+              { key: 'c', label: 'Company', primary: true, render: x => x.r.company.name },
               { key: 'h', label: 'Holder', hideMobile: true, render: x => holder(x.l.holder_category) },
               { key: 'p', label: '% equity', right: true, render: x => pct(Number(x.l.pct_post_issue?.value)) },
               { key: 'u', label: '', right: true, render: x => { const u = urgency(x.d); return <Pill tone={u.tone}>{x.d}d</Pill> } },
@@ -142,8 +144,8 @@ function NewFilings() {
   return (
     <Card title="New filings · last 14 days" action={<a className="btn btn-primary" href="#/anchor">Anchor Desk →</a>} solid>
       <Table rows={rows} onRow={r => go(`/company/${r.company.company_id}`)} empty="No new DRHPs in the last 14 days" cols={[
-        { key: 'f', label: 'Filed', render: r => { const n = -daysUntil(filedOn(r)!); return n === 0 ? <Pill tone="green">Today</Pill> : `${n}d ago` } },
-        { key: 'c', label: 'Company', render: r => <div><b>{r.company.name}</b><div className="muted text-xs">{r.company.segment === 'SME' ? 'SME' : 'Mainboard'}</div></div> },
+        { key: 'f', label: 'Filed', m: 'key', render: r => { const n = -daysUntil(filedOn(r)!); return n === 0 ? <Pill tone="green">Today</Pill> : `${n}d ago` } },
+        { key: 'c', label: 'Company', primary: true, render: r => <div><b>{r.company.name}</b><div className="muted text-xs">{r.company.segment === 'SME' ? 'SME' : 'Mainboard'}</div></div> },
         { key: 's', label: 'Size', right: true, render: r => dealSize(r).text },
         { key: 'b', label: 'Lead managers', hideMobile: true, render: r => brlms(r).map(b => b.name.replace(/ (Private )?Limited$/i, '')).join(', ') || <span className="muted">reading cover…</span> },
       ]} />

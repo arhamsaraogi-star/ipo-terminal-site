@@ -153,20 +153,53 @@ body {
   .bottom-nav .ico { font-size: 18px; line-height: 1; }
   main.page { padding-bottom: 96px; }
 }
+.m-br { display: none; }
 @media (max-width: 720px) {
-  .tbl thead { display: none; }
-  .tbl, .tbl tbody, .tbl tr, .tbl td { display: block; width: 100%; }
-  .tbl tr { padding: 12px 6px; border-bottom: 1px solid var(--hairline); }
-  .tbl tr:last-child { border-bottom: 0; }
-  .tbl td { border: 0 !important; padding: 3px 4px; display: flex; justify-content: space-between; align-items: baseline; gap: 14px; text-align: right; }
-  .tbl td::before { content: attr(data-label); color: var(--ink-3); font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; text-align: left; flex-shrink: 0; }
-  .tbl td.td-primary { display: block; text-align: left; font-size: 16px; padding-bottom: 6px; }
-  .tbl td.td-primary::before, .tbl td[data-label=""]::before { display: none; }
-  .tbl td[data-label=""] { justify-content: flex-end; }
+  /* list tables → compact two-line rows: title + key figure, then a small meta line */
+  .tbl-list thead { display: none; }
+  .tbl-list, .tbl-list tbody { display: block; width: 100%; }
+  .tbl-list tr { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 12px; row-gap: 3px; padding: 11px 4px; border-bottom: 1px solid var(--hairline); }
+  .tbl-list tr:last-child { border-bottom: 0; }
+  .tbl-list td { display: block; border: 0 !important; padding: 0; text-align: left; }
+  .tbl-list td.m-title { flex: 1 1 0; min-width: 0; font-size: 15.5px; line-height: 1.3; }
+  .tbl-list td.m-title b { font-weight: 650; }
+  .tbl-list td.m-key { flex: 0 0 auto; margin-left: auto; text-align: right; font-weight: 650; font-size: 15px; }
+  .tbl-list td.m-br { display: block; flex-basis: 100%; height: 0; order: 1; }
+  .tbl-list td.m-meta { order: 2; font-size: 12.5px; color: var(--ink-2); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .tbl-list td.m-meta::before { content: attr(data-label) " "; color: var(--ink-3); font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .tbl-list td.m-meta[data-label=""]::before { content: none; }
+  .tbl-list td.m-meta .pill { font-size: 11px; padding: 1px 7px; }
+  .tbl-list td.m-hide { display: none; }
+  .tbl-list tbody tr:hover { background: transparent; }
+  /* wide numeric tables keep their grid and scroll sideways */
+  .tbl-wrap.wide { margin: 0 -12px; padding: 0 12px; }
+  .tbl-wide { font-size: 13.5px; }
+  .tbl-wide th, .tbl-wide td { padding: 8px 10px; white-space: nowrap; }
+  .tbl-wide td:first-child, .tbl-wide th:first-child { position: sticky; left: 0; z-index: 1; background: var(--glass-solid); white-space: normal; min-width: 130px; max-width: 160px; }
   .hide-m { display: none !important; }
-  .tbl tbody tr:hover { background: transparent; }
-  .seg { width: 100%; overflow-x: auto; flex-wrap: nowrap; }
-  .seg button { flex-shrink: 0; }
-  .pop { width: min(300px, 80vw); }
+  .seg { max-width: 100%; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
+  .seg::-webkit-scrollbar { display: none; }
+  .seg button { flex-shrink: 0; padding: 6px 11px; }
+  .pop { width: min(300px, 86vw); }
+  .glass.p-5, .glass.p-6 { padding: 16px !important; }
+  h1.display { font-size: 26px !important; }
+  .display.text-\[38px\] { font-size: 26px !important; }
+  .display.text-\[34px\] { font-size: 26px !important; }
+  .hide-phone { display: none !important; }
+  .clamp-m { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+  .space-y-5 > * + * { margin-top: 14px !important; }
 }
+}
+
+/* ───────────── print: one-page IC brief from a company page ───────────── */
+@media print {
+  @page { margin: 12mm; }
+  :root, :root[data-theme="dark"] { --bg-0: #fff; --ink: #0b1220; --ink-2: #3c4658; --ink-3: #6b7486; --glass: #fff; --glass-strong: #fff; --glass-solid: #fff;
+    --glass-border: #e3e6ec; --hairline: #e3e6ec; --highlight: transparent; --shadow: none; color-scheme: light; }
+  body { background: #fff !important; font-size: 11.5px; }
+  .ambient, aside, .bottom-nav, .btn, .seg, input, .sticky, nav { display: none !important; }
+  .glass { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; box-shadow: none !important; break-inside: avoid; }
+  main.page { padding: 0 !important; }
+  .lg\:grid { display: block !important; }
+  a { color: inherit !important; text-decoration: none !important; }
 }

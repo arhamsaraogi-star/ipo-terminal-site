@@ -9,6 +9,7 @@ import {
 import { crore, daysUntil, fmtDate, fmtDateTime, fv, humanize, inr, num, pct, shares, urgency } from '../lib/format'
 import type { CompanyRecord, Fact, Holding } from '../lib/types'
 import { holder } from './Dashboard'
+import { anchorOutcome, expectedWindow, timelineStats } from '../lib/derive'
 import { PrivateView } from './PrivateCo'
 import { TrackButton } from '../components/Track'
 import { WebIntel } from '../components/WebNews'
@@ -47,6 +48,7 @@ export default function CompanyPage({ id }: { id: string }) {
           <div className="flex gap-2 flex-wrap">
             <button className="btn btn-primary" onClick={() => setForm(f => !f)}>{held ? '★ Edit holding' : '★ Add to portfolio'}</button>
             <TrackButton id={cid} />
+            <button className="btn hide-phone" onClick={() => window.print()} title="One-page brief for an investment committee">⎙ IC brief</button>
           </div>
         </div>
         <MetricStrip r={r} />
@@ -69,7 +71,9 @@ function M({ label, children, sub }: { label: string; children: React.ReactNode;
   return <div className="min-w-0"><div className="eyebrow">{label}</div><div className="display text-[22px] md:text-[26px] font-semibold leading-tight mt-0.5">{children}</div>{sub && <div className="muted text-xs mt-0.5">{sub}</div>}</div>
 }
 function MetricStrip({ r }: { r: CompanyRecord }) {
-  const et = useVault().event_types
+  const vv = useVault()
+  const et = vv.event_types
+  const win = useMemo(() => expectedWindow(r, timelineStats(vv, r.company.segment)), [vv, r])
   const q = quote(r), listed = listedOn(r)
   const sub = ipo(r)?.subscription?.total_times
   if (q || listed) {
@@ -91,7 +95,9 @@ function MetricStrip({ r }: { r: CompanyRecord }) {
       <M label="Filed" sub={filedOn(r) ? `${-daysUntil(filedOn(r)!)} days ago` : undefined}>{fmtDate(filedOn(r))}</M>
       <M label="Size (as filed)">{ds.text}</M>
       <M label="Price band">{priceBand(r)}</M>
-      <M label="Next milestone" sub={ne ? fmtDate(ne.date) : undefined}>{ne ? <span className="text-[17px]">{et[ne.event_type]?.label ?? humanize(ne.event_type)}</span> : '—'}</M>
+      {ne ? <M label="Next milestone" sub={fmtDate(ne.date)}><span className="text-[17px]">{et[ne.event_type]?.label ?? humanize(ne.event_type)}</span></M>
+        : win ? <M label="Expected issue window" sub={`typical for ${r.company.segment === 'SME' ? 'SME' : 'mainboard'} · ${win.n} past issues`}><span className="text-[17px]">{monthYear(win.from)} – {monthYear(win.to)}</span></M>
+        : <M label="Next milestone">—</M>}
       <M label="Lead managers"><span className="text-[15px] font-medium">{brlms(r).map(b => b.name.replace(/ (Private )?Limited$/i, '')).join(', ') || '—'}</span></M>
     </div>
   )
@@ -129,7 +135,35 @@ function PriceChart({ r }: { r: CompanyRecord }) {
   )
 }
 
+const monthYear = (d: string) => new Date(d).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
+
+// ───────── anchor economics for a listed IPO ─────────
+function AnchorCard({ r }: { r: CompanyRecord }) {
+  const o = anchorOutcome(r)
+  if (!o) return null
+  const step = (l: string, d: string | null, v: number | null, note?: string) => (
+    <div className="glass p-3"><div className="eyebrow">{l}</div><div className="display text-[22px] font-semibold"><Delta v={v} /></div><div className="muted text-xs">{d ? fmtDate(d, false) : ''}{note ? ` · ${note}` : ''}</div></div>)
+  return (
+    <Card title="If you were an anchor" solid>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        {step('Listing open', o.listed, o.rOpen)}
+        {step('Day-30 unlock (50%)', o.d30, o.r30, o.r30 == null ? 'not yet' : undefined)}
+        {step('Day-90 unlock (50%)', o.d90, o.r90, o.r90 == null ? 'not yet' : undefined)}
+        {step('Today', null, o.rNow)}
+        <div className="glass p-3" style={{ outline: '1px solid var(--accent)' }}><div className="eyebrow">Anchor return</div><div className="display text-[22px] font-semibold"><Delta v={o.blended} /></div><div className="muted text-xs">{o.final ? 'final · 50/50 exit at unlocks' : 'so far · open legs marked at today'}</div></div>
+      </div>
+      <p className="muted text-xs mt-2">Bought at the issue price ₹{o.ip}; anchor lock-ins run 30 days (50%) and 90 days (50%) from allotment ({fmtDate(o.allot)}). Exchange closing prices.</p>
+    </Card>
+  )
+}
+
 // ───────── overview ─────────
+function ReadMore({ text }: { text: string }) {
+  const [open, setOpen] = useState(false)
+  return <div><p className={`ink2 text-[15px] leading-relaxed ${open ? '' : 'clamp-m'}`}>{text}</p>
+    {text.length > 320 && <button className="text-sm mt-1" style={{ color: 'var(--accent)' }} onClick={() => setOpen(o => !o)}>{open ? 'Show less' : 'Read more'}</button>}</div>
+}
+
 function Overview({ r }: { r: CompanyRecord }) {
   const v = useVault()
   const upcoming = r.events.filter(e => daysUntil(e.date) >= 0).slice(0, 6)
@@ -137,11 +171,12 @@ function Overview({ r }: { r: CompanyRecord }) {
     <div className="space-y-5">
       {r.company.overview?.summary && (
         <Card title="About the company" solid>
-          <p className="ink2 text-[15px] leading-relaxed">{r.company.overview.summary}</p>
+          <ReadMore text={r.company.overview.summary} />
           {r.company.overview.source && <p className="muted text-xs mt-2">From the offer document's “Our Business — Overview” · <SourceLine s={r.company.overview.source} /></p>}
         </Card>
       )}
       <PriceChart r={r} />
+      <AnchorCard r={r} />
       <div className="grid xl:grid-cols-2 gap-5">
         <DealTeam r={r} />
         <OfferAsFiled r={r} />
@@ -149,8 +184,8 @@ function Overview({ r }: { r: CompanyRecord }) {
       <FinancialSnapshot r={r} />
       <Card title="Coming up" solid>
         <Table rows={upcoming} empty="No upcoming events" cols={[
-          { key: 'd', label: 'Date', render: e => <b>{fmtDate(e.date)}</b> },
-          { key: 'e', label: 'Event', render: e => v.event_types[e.event_type]?.label ?? e.event_type },
+          { key: 'd', label: 'Date', m: 'key', render: e => <b>{fmtDate(e.date)}</b> },
+          { key: 'e', label: 'Event', primary: true, render: e => v.event_types[e.event_type]?.label ?? e.event_type },
           { key: 'k', label: 'Status', render: e => <Pill tone={e.date_kind === 'actual' ? 'green' : e.date_kind === 'scheduled' ? 'blue' : 'slate'}>{e.date_kind === 'derived' ? 'estimated' : e.date_kind}</Pill> },
           { key: 'x', label: 'Detail', render: e => <span className="text-sm">{e.detail ?? ''}</span> },
         ]} />
@@ -251,7 +286,7 @@ function Financials({ r }: { r: CompanyRecord }) {
         <p className="muted text-xs">₹ crore. * = part-year (stub) period. Margins are as printed in the document, or calculated where not printed.</p>
       </Card>
       <Card title="Restated financials (₹ crore unless stated)" solid>
-        <Table rows={FIN_ORDER.filter(([m]) => byMetric.has(m))} cols={[
+        <Table wide rows={FIN_ORDER.filter(([m]) => byMetric.has(m))} cols={[
           { key: 'm', label: 'Metric', render: ([, l]) => <b>{l}</b> },
           ...periods.map(p => ({ key: p, label: isStub(p) ? `${p} (part-year)` : p, right: true, render: ([m]: [string, string]) => <FactValue f={byMetric.get(m)?.get(p)} /> })),
         ]} />
@@ -306,7 +341,7 @@ function Valuation({ r }: { r: CompanyRecord }) {
     <div className="space-y-5">
       {V.points.some(p => p.price) && <Card title="Valuation inputs" solid>
         <p className="muted text-sm mb-3">Mechanical calculations from disclosed figures — inputs for your own model, not a view on value.</p>
-        <div className="tbl-wrap"><table className="tbl">
+        <div className="tbl-wrap wide"><table className="tbl tbl-wide">
           <thead><tr><th>Metric</th>{V.points.map(p => <th key={p.key} className="r">{p.label}</th>)}</tr></thead>
           <tbody>{rows.map(row => (
             <tr key={row.label}><td className="td-primary" data-label="">{row.label}{row.note && <div className="muted text-xs">{row.note}</div>}</td>
@@ -322,7 +357,7 @@ function Valuation({ r }: { r: CompanyRecord }) {
       </Card>}
       <WhatIf V={V} />
       <Card title="Listed peers — today vs the offer document" solid>
-        <Table rows={peers} empty="No peer comparison table found in the offer document" initialSort={{ key: 'mc', dir: -1 }} cols={[
+        <Table wide rows={peers} empty="No peer comparison table found in the offer document" initialSort={{ key: 'mc', dir: -1 }} cols={[
           { key: 'n', label: 'Company', render: p => <div><b>{p.name.replace(/\s*\((consolidated|standalone)[^)]*\)/i, '')}</b>{p.live && <div className="muted text-xs">NSE: {p.live.symbol}</div>}</div> },
           { key: 'pr', label: 'Price today', right: true, render: p => (p.live ? inr(p.live.price, 2) : <span className="muted">not listed / no match</span>), sort: p => p.live?.price ?? null },
           { key: 'mc', label: 'Mcap today', right: true, render: p => crore(p.live?.mcap_cr), sort: p => p.live?.mcap_cr ?? null },
@@ -451,7 +486,7 @@ function Docs({ r }: { r: CompanyRecord }) {
   return (
     <Card title="Documents" solid>
       <Table rows={rows} empty="No documents registered" cols={[
-        { key: 'f', label: 'Filed', render: d => fmtDate(d.filing_date), sort: d => d.filing_date ?? '' },
+        { key: 'f', label: 'Filed', m: 'key', render: d => fmtDate(d.filing_date), sort: d => d.filing_date ?? '' },
         { key: 't', label: 'Type', render: d => <Pill tone="blue">{d.doc_type}</Pill> },
         { key: 'n', label: 'Document', render: d => <a href={d.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>{d.title ?? d.document_id}</a> },
         { key: 'p', label: 'Pages', right: true, hideMobile: true, render: d => d.pages ?? '—' },
@@ -464,7 +499,7 @@ function NewsTab({ r }: { r: CompanyRecord }) {
   return (
     <Card title="Exchange announcements & news" solid>
       <Table rows={r.news} empty="No announcements yet" search={n => `${n.title} ${n.category}`} cols={[
-        { key: 't', label: 'Time', render: n => fmtDateTime(n.published_at), sort: n => n.published_at },
+        { key: 't', label: 'Time', m: 'key', render: n => fmtDateTime(n.published_at), sort: n => n.published_at },
         { key: 'h', label: 'Headline', primary: true, render: n => n.url.startsWith('http') ? <a href={n.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>{n.title}</a> : n.title },
         { key: 'c', label: 'Type', render: n => <Pill tone={n.tier === 'official' ? 'blue' : 'slate'}>{n.category.replace(/_/g, ' ')}</Pill> },
       ]} />

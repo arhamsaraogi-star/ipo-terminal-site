@@ -32,7 +32,7 @@ export function Filings() {
       <PageHead title="New Filings" sub="Offer documents and SEBI actions in the last 120 days." />
       <Card solid>
         <Table rows={rows} onRow={x => go(`/company/${x.r.company.company_id}`)} cols={[
-          { key: 'd', label: 'Date', render: x => <b>{fmtDate(x.e.date)}</b>, sort: x => x.e.date },
+          { key: 'd', label: 'Date', m: 'key', render: x => <b>{fmtDate(x.e.date)}</b>, sort: x => x.e.date },
           { key: 't', label: 'Filing', render: x => <Pill tone="violet">{v.event_types[x.e.event_type]?.label}</Pill> },
           { key: 'c', label: 'Company', render: x => x.r.company.name },
           { key: 's', label: 'Current stage', render: x => <Stage s={x.r.company.lifecycle} /> },
@@ -56,10 +56,10 @@ export function NewsPage() {
       <PageHead title="News" sub="All IPOs = listed in the last 3 months or filed in the last 6 months. Tracked = your portfolio + tracking list, all news, no time limit." />
       <Card solid action={<Seg value={scope} onChange={setScope} options={[{ v: 'all', label: 'All IPOs' }, { v: 'tracked', label: 'Tracked' }]} />} title={`${rows.length} items`}>
         <Table rows={rows} cols={[
-          { key: 't', label: 'Time', render: x => fmtDateTime(x.n.published_at), sort: x => x.n.published_at },
-          { key: 'c', label: 'Company', render: x => <a href={`#/company/${x.r.company.company_id}`}>{x.r.company.name}</a> },
+          { key: 't', label: 'Time', m: 'key', render: x => fmtDateTime(x.n.published_at), sort: x => x.n.published_at },
+          { key: 'c', label: 'Company', primary: true, render: x => <a href={`#/company/${x.r.company.company_id}`}>{x.r.company.name}</a> },
           { key: 'k', label: 'Type', render: x => <Pill tone={x.n.tier === 'official' ? 'blue' : 'slate'}>{x.n.category.replace(/_/g, ' ')}</Pill> },
-          { key: 'h', label: 'Headline', render: x => x.n.url.startsWith('http') ? <a href={x.n.url} target="_blank" rel="noreferrer">{x.n.title}</a> : x.n.title },
+          { key: 'h', label: 'Headline', m: 'meta', render: x => x.n.url.startsWith('http') ? <a href={x.n.url} target="_blank" rel="noreferrer">{x.n.title}</a> : x.n.title },
           { key: 'p', label: 'Source', render: x => x.n.publisher ?? '—' },
         ]} />
       </Card>

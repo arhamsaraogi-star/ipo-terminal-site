@@ -14,11 +14,21 @@ BASE = "https://www.bsesme.com"
 URL = f"{BASE}/PublicIssues/SMEIPODRHP.aspx"
 
 
+MIRROR = "https://www.bseindia.com/corporates/download/"
+
+
+def mirror(url: str) -> str:
+    """bsesme.com/download/<id>/<folder>/<file> is served identically at bseindia.com/corporates/download/<id>/...
+    bseindia.com is reachable from cloud runners where bsesme.com often is not."""
+    m = re.match(r"https?://(?:www\.)?bsesme\.com/download/(.+)$", url, re.I)
+    return MIRROR + m.group(1) if m else url
+
+
 def _abs(href: str) -> str:
     href = html.unescape(href).strip()
     if href.startswith("http"):
-        return href
-    return BASE + "/" + re.sub(r"^(\.\./|\./|/)+", "", href)
+        return mirror(href)
+    return mirror(BASE + "/" + re.sub(r"^(\.\./|\./|/)+", "", href))
 
 
 def _stamp(href: str) -> str | None:
@@ -59,5 +69,13 @@ def parse(page: str) -> list[dict]:
 
 
 def fetch(client) -> list[dict]:
-    r = client.request("GET", URL, headers={"Referer": BASE + "/"})
-    return parse(r.text)
+    last = None
+    for url in (URL, URL.replace("https://www.", "https://"), URL.replace("https://", "http://")):
+        try:
+            r = client.request("GET", url, headers={"Referer": BASE + "/"})
+            rows = parse(r.text)
+            if rows:
+                return rows
+        except Exception as e:  # noqa: BLE001
+            last = e
+    raise last or RuntimeError("BSE SME offer-document page returned no rows")

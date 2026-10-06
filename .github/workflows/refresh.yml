@@ -31,7 +31,7 @@ jobs:
       TERMINAL_PASSPHRASE: ${{ secrets.TERMINAL_PASSPHRASE }}
       SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }}
       PYTHONPATH: src
-      DOC_WORKERS: "4"
+      DOC_WORKERS: "6"
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 1 }

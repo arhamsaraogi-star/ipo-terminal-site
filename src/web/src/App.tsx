@@ -424,6 +424,7 @@ function AccountMenu() {
       {open && (
         <div className="pop glass glass-strong right-0 top-12 w-[280px] p-4 space-y-3" style={{ color: 'var(--ink)' }}>
           <div><div className="font-semibold">{username}</div><SyncLine sync={sync} /></div>
+          <div className="flex items-center justify-between text-sm"><span className="ink2">Appearance</span><ThemeToggle /></div>
           {!cp ? <button className="btn w-full justify-center" onClick={() => setCp(true)}>Change password</button> : (
             <form className="space-y-2" onSubmit={async e => { e.preventDefault(); setM(''); try { await changePw(o, n); setM('Password changed'); setO(''); setN(''); setCp(false) } catch (x) { setM((x as Error).message) } }}>
               <input type="password" className="input !h-9" placeholder="Current password" value={o} onChange={e => setO(e.target.value)} autoComplete="current-password" />
@@ -497,7 +498,7 @@ function TopBar({ onMenu }: { onMenu: () => void }) {
           </div>
         )}
       </div>
-      <ThemeToggle />
+      <span className="hide-phone"><ThemeToggle /></span>
       <AccountMenu />
     </div>
   )

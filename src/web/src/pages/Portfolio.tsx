@@ -154,7 +154,7 @@ export default function Portfolio() {
       <Card title="Tracking" solid><TrackingTable /></Card>
       <Card title="Every announcement on my holdings" action={<Seg value={tier} onChange={setTier} options={[{ v: 'all', label: 'All' }, { v: 'official', label: 'Exchange' }, { v: 'media', label: 'Media' }]} />} solid>
         <Table rows={news} empty="No announcements yet" search={x => `${x.r.company.name} ${x.n.title}`} cols={[
-          { key: 't', label: 'Time', render: x => fmtDateTime(x.n.published_at), sort: x => x.n.published_at },
+          { key: 't', label: 'Time', m: 'key', render: x => fmtDateTime(x.n.published_at), sort: x => x.n.published_at },
           { key: 'h', label: 'Headline', primary: true, render: x => <span><b>{x.r.company.name}</b> — {x.n.url.startsWith('http') ? <a href={x.n.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>{x.n.title}</a> : x.n.title}</span> },
           { key: 'cat', label: 'Type', render: x => <Pill tone={x.n.tier === 'official' ? 'blue' : 'slate'}>{x.n.category.replace(/_/g, ' ')}</Pill> },
         ]} />

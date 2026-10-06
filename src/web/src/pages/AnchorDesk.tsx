@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { AnchorScorecard, TimelineCard } from '../components/Insights'
 import { useVault, go } from '../App'
 import { Card, FactValue, Kpi, PageHead, Pill, Seg, Stage, Table } from '../components/ui'
 import { eventDate, ipo } from '../lib/derive'
@@ -79,8 +80,8 @@ export default function AnchorDesk() {
   }, [v, seg])
 
   const cols = [
-    { key: 'f', label: 'Filed', sort: (r: CompanyRecord) => filedOn(r), render: (r: CompanyRecord) => { const d = filedOn(r)!; const n = -daysUntil(d); return <div><b>{fmtDate(d, false)}</b><div className="text-xs">{n === 0 ? <Pill tone="green">Today</Pill> : <span className="muted">{n}d ago</span>}</div></div> } },
-    { key: 'c', label: 'Company', sort: (r: CompanyRecord) => r.company.name, render: (r: CompanyRecord) => <div><b>{r.company.name}</b>
+    { key: 'f', label: 'Filed', m: 'key' as const, sort: (r: CompanyRecord) => filedOn(r), render: (r: CompanyRecord) => { const d = filedOn(r)!; const n = -daysUntil(d); return <div><b>{fmtDate(d, false)}</b><div className="text-xs">{n === 0 ? <Pill tone="green">Today</Pill> : <span className="muted">{n}d ago</span>}</div></div> } },
+    { key: 'c', label: 'Company', primary: true, sort: (r: CompanyRecord) => r.company.name, render: (r: CompanyRecord) => <div><b>{r.company.name}</b>
       <div className="muted text-xs">{r.company.segment === 'SME' ? 'SME' : 'Mainboard'}{ipo(r)?.facts.eligibility_regulation ? ` · Reg ${ipo(r)!.facts.eligibility_regulation.value}` : ''}{r.company.drhp_status ? ` · ${r.company.drhp_status}` : ''}</div></div> },
     { key: 's', label: 'Size (cover)', right: true, sort: (r: CompanyRecord) => fv(pick(r)), render: (r: CompanyRecord) => { const s = dealSize(r); return s.f ? <FactValue f={s.f}>{s.text}</FactValue> : '—' } },
     { key: 't', label: 'Structure', render: (r: CompanyRecord) => <div className="text-sm">{String(ipo(r)?.facts.offer_type?.value ?? '—')}
@@ -132,6 +133,10 @@ export default function AnchorDesk() {
           ]} />
           <p className="muted text-xs mt-2">Click a bank to see only its mandates. Contacts are the deal-team addresses printed on the offer-document cover.</p>
         </Card>
+      </div>
+      <div className="grid xl:grid-cols-[1.6fr_1fr] gap-5 items-start">
+        <AnchorScorecard />
+        <TimelineCard />
       </div>
     </div>
   )

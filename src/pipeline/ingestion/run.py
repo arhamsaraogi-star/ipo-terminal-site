@@ -820,14 +820,15 @@ def download(client: Client, url: str) -> bytes:
     raise SourceError(f"{url}: truncated download ({len(blob)} of {want} bytes)")
 
 
-DOC_VERSION = "doc/3"
+DOC_VERSION = "doc/4"
 DOC_ORDER = {"PROSPECTUS": 0, "RHP": 1, "UDRHP": 2, "DRHP": 3}
 
 
 def best_document(b: CompanyBundle) -> dict | None:
     """Most advanced readable offer document: Prospectus > RHP > UDRHP > DRHP; newest within a type."""
     docs = [d for d in b.documents if d["doc_type"] in DOC_ORDER and re.search(r"\.(pdf|zip)$", d["url"], re.I)
-            and (d.get("extraction") or {}).get("status") != "failed_permanent"]
+            and not ((d.get("extraction") or {}).get("status") == "failed_permanent"
+                     and (d.get("extraction") or {}).get("extractor") == DOC_VERSION and (d.get("extraction") or {}).get("url") == d["url"])]
     if not docs:
         return None
     return min(docs, key=lambda d: (DOC_ORDER[d["doc_type"]], -int((d.get("filing_date") or "0000-00-00").replace("-", ""))))
@@ -850,6 +851,11 @@ def extract_documents(st: State, client: Client, budget: int, minutes: float = 3
     Re-runs when a newer document type arrives (DRHP -> RHP -> Prospectus) or the extractor version changes."""
     import gzip
     import time
+    from pipeline.ingestion.bsesme import mirror
+    for b in st.bundles.values():
+        for d in b.documents:
+            if "bsesme.com/download/" in d.get("url", ""):
+                d["url"] = mirror(d["url"])
     deadline = time.monotonic() + minutes * 60
     done = failed = 0
     queue = []
@@ -863,7 +869,8 @@ def extract_documents(st: State, client: Client, budget: int, minutes: float = 3
         stage = b.company["lifecycle"]
         filed = max([e["date"] for e in b.events if e["event_type"] in ("DRHP_FILED", "UDRHP_FILED", "RHP_FILED", "PROSPECTUS_FILED")] or ["0000"])
         urgent = stage in ("ISSUE_OPEN", "ISSUE_ANNOUNCED", "ISSUE_CLOSED", "RHP_FILED", "LISTED") or (TODAY - date.fromisoformat(filed)).days <= 14 if filed != "0000" else False
-        queue.append((0 if urgent else 1, "".join(chr(255 - ord(c)) for c in filed), b, d))
+        never = ex.get("status") != "ok"                 # never read (e.g. new BSE SME filings) beats a re-read
+        queue.append(((0 if never else 2) + (0 if urgent else 1), "".join(chr(255 - ord(c)) for c in filed), b, d))
     queue.sort(key=lambda x: (x[0], x[1]))
     # Parallel: offer documents are 5–25 MB and take 10–40 s each to download + read. A process pool reads several at once
     # (downloads are network-bound, parsing is CPU-bound — GitHub runners have 4 cores).
@@ -887,7 +894,10 @@ def extract_documents(st: State, client: Client, budget: int, minutes: float = 3
                     r = fut.result()
                 except Exception as exn:  # noqa: BLE001 — any parser failure is recorded, never fatal
                     tries = (d.get("extraction") or {}).get("tries", 0) + 1
+                    if (d.get("extraction") or {}).get("url") not in (None, d["url"]) or (d.get("extraction") or {}).get("extractor") != DOC_VERSION:
+                        tries = 1                           # new URL or new extractor: start counting again
                     d["extraction"] = {"status": "failed_permanent" if tries >= 3 else "failed", "tries": tries,
+                                       "url": d["url"], "extractor": DOC_VERSION,
                                        "error": str(exn)[:200], "extracted_at": now_ist()}
                     failed += 1
                     continue

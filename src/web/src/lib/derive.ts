@@ -198,3 +198,55 @@ export function portfolioIssueUrl(repo: string | null | undefined, action: 'add'
   const q = new URLSearchParams({ title: `portfolio: ${action} ${companyId}`, labels: 'portfolio', body })
   return `https://github.com/${repo}/issues/new?${q}`
 }
+
+// ───────── anchor outcomes: what an anchor investor actually earned ─────────
+/** Close on or just after a date, from the price history ([date, close] pairs, ascending). */
+export function closeOnOrAfter(r: CompanyRecord, d: string): { date: string; close: number } | null {
+  const h = r.market?.history ?? []
+  const x = h.find(p => p[0] >= d)
+  return x ? { date: x[0], close: x[1] } : null
+}
+const addDays = (d: string, n: number) => new Date(Date.parse(d) + n * 864e5).toISOString().slice(0, 10)
+
+/** Anchor economics for a listed IPO: issue price → listing open → day-30 unlock (50%) → day-90 unlock (50%) → today.
+ *  Lock-in clocks run from the allotment date (SEBI ICDR). Blended = 50/50 exit at the two unlocks, or today if not yet reached. */
+export function anchorOutcome(r: CompanyRecord) {
+  const ip = fv(ipo(r)?.facts.issue_price)
+  const listed = listedOn(r)
+  if (!ip || !listed) return null
+  const allot = eventDate(r, 'BASIS_OF_ALLOTMENT') ?? listed
+  const today = isoToday()
+  const d30 = addDays(allot, 30), d90 = addDays(allot, 90)
+  const at = (d: string) => (d <= today ? closeOnOrAfter(r, d)?.close ?? null : null)
+  const p30 = at(d30), p90 = at(d90), now = cmp(r)
+  const ret = (p: number | null) => (p != null ? (p / ip - 1) * 100 : null)
+  const exit30 = p30 ?? (d30 > today ? now : null), exit90 = p90 ?? (d90 > today ? now : null)
+  const blended = exit30 != null && exit90 != null ? ((exit30 + exit90) / 2 / ip - 1) * 100 : null
+  return { ip, listed, allot, d30, d90, open: listingOpen(r), r30: ret(p30), r90: ret(p90), rNow: ret(now), rOpen: ret(listingOpen(r)),
+    blended, final: d90 <= today && p90 != null }
+}
+
+// ───────── filing → launch timeline, learned from this terminal's own history ─────────
+export function timelineStats(v: Vault, segment?: string) {
+  const days = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5)
+  const toObs: number[] = [], toOpen: number[] = []
+  for (const r of v.companies) {
+    if (segment && r.company.segment !== segment) continue
+    const f = r.events.filter(e => ['DRHP_FILED'].includes(e.event_type)).map(e => e.date).sort()[0]
+    const op = eventDate(r, 'ISSUE_OPEN')
+    if (f && op && op > f) toOpen.push(days(f, op))
+    const obs = r.events.find(e => e.event_type === 'SEBI_OBSERVATION' || e.event_type === 'SEBI_OBSERVED')?.date
+    if (f && obs && obs > f) toObs.push(days(f, obs))
+  }
+  const q = (a: number[], p: number) => { if (!a.length) return null; const b = [...a].sort((x, y) => x - y); return b[Math.min(b.length - 1, Math.floor(p * b.length))] }
+  return { toOpen: { n: toOpen.length, p25: q(toOpen, .25), p50: q(toOpen, .5), p75: q(toOpen, .75) }, toObs: { n: toObs.length, p50: q(toObs, .5) } }
+}
+
+/** Expected issue window for a company still in the pipeline, from the DRHP→open distribution. */
+export function expectedWindow(r: CompanyRecord, st: ReturnType<typeof timelineStats>) {
+  if (!['DRHP_FILED', 'SEBI_OBSERVED'].includes(r.company.lifecycle)) return null
+  const f = r.events.filter(e => e.event_type === 'DRHP_FILED').map(e => e.date).sort()[0]
+  const { p25, p50, p75, n } = st.toOpen
+  if (!f || p25 == null || p75 == null || p50 == null || n < 8) return null
+  return { from: addDays(f, p25), mid: addDays(f, p50), to: addDays(f, p75), n }
+}

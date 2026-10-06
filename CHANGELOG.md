@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0 — 2026-10-06 · BSE SME documents read, phone layout, anchor intelligence
+- BSE SME offer documents downloaded via the bseindia.com mirror (bsesme.com blocks cloud runners); every document re-read (doc/4), never-read documents first, 6 parallel workers
+- SME cover pages: lead manager / registrar parsed when the name follows the contact details; company summary from SME "Our Business" chapters
+- Phone layout: compact two-line rows (title + key figure + meta line), wide tables scroll with a sticky first column, scrollable tabs, smaller headings
+- Anchor scorecard: what anchors actually earned (issue → day-30 / day-90 unlocks) by deal and by lead manager
+- "If you were an anchor" on every listed company; expected issue window for every DRHP (learned from past DRHP→launch times)
+- "Since your last visit" strip on Home; one-page IC brief (print / save as PDF) from any company page
+
 ## 0.6.0 — 2026-10-06 · Live peers, BSE coverage, tracked zone
 - Offer-document peer tables brought up to today's NSE close (price, market cap, P/E and P/B on the document's EPS / NAV)
 - BSE SME DRHPs / RHPs / prospectuses from the exchange's own page (bsesme.com), dated the day they are filed

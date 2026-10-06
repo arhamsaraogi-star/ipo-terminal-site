@@ -579,46 +579,62 @@ def extract(pdf: bytes) -> Result:
     return res
 
 
-# ───────────────────────── company overview (Our Business → Overview) ─────────────────────────
-BUS_RE = re.compile(r"^\s*OUR\s+BUSINESS\s*$", re.M)
-OVERVIEW_HEAD = re.compile(r"^\s*(?:Business\s+)?Overview\s*:?\s*$", re.M | re.I)
+# ───────────────────────── company overview (Our Business → first substantive paragraphs) ─────────────────────────
+BUS_RE = re.compile(r"^\s*(?:OUR\s+BUSINESS|BUSINESS\s+OVERVIEW|OUR\s+BUSINESS\s+OVERVIEW)\s*$", re.M)
+BOILER = re.compile(r"forward[- ]looking|should be read|qualified in its entirety|Restated Financial|references to .{0,20}\b(we|us|our)\b|"
+                    r"Unless (?:the context|otherwise)|Risk Factors|industry (?:and market )?data|commissioned|paid for by|"
+                    r"financial year ends|derived from|page \d+", re.I)
+
+
+def _paras(text: str) -> list[str]:
+    out, para = [], []
+    for line in text.splitlines():
+        l = line.strip()
+        if not l or re.fullmatch(r"(Page )?\d{1,4}( of \d+)?", l, re.I) or re.search(r"(Draft )?(Red Herring )?Prospectus$", l):
+            if para:
+                out.append(" ".join(para)); para = []
+            continue
+        words = l.split()
+        if len(l) < 60 and not re.search(r"[.,;:)]$", l) and sum(w[:1].isupper() for w in words) >= max(1, len(words) - 1):
+            if para:
+                out.append(" ".join(para)); para = []
+            out.append("§" + l)                         # heading marker
+            continue
+        para.append(l)
+    if para:
+        out.append(" ".join(para))
+    return out
 
 
 def scan_overview(pages_text: list[str], max_chars: int = 1400) -> tuple[str | None, int | None]:
-    """First paragraphs under 'Overview' in the 'Our Business' chapter, as printed (source tags removed)."""
+    """The company's own description: first non-boilerplate paragraphs of the Our Business chapter (source tags removed)."""
     starts = [i for i, t in enumerate(pages_text) if i > 10 and BUS_RE.search(t)]
     for s0 in starts[:3]:
-        for i in range(s0, min(s0 + 4, len(pages_text))):
-            m = OVERVIEW_HEAD.search(pages_text[i])
-            if not m:
-                continue
-            text = pages_text[i][m.end():] + "\n" + (pages_text[i + 1] if i + 1 < len(pages_text) else "")
-            out, para = [], []
-            for line in text.splitlines():
-                l = line.strip()
-                if not l:
-                    if para:
-                        out.append(" ".join(para)); para = []
-                    continue
-                if re.fullmatch(r"\d{1,4}", l):            # page number
-                    continue
-                words = l.split()
-                heading = len(l) < 70 and not re.search(r"[.,;:)]$", l) and sum(w[:1].isupper() for w in words) >= max(1, len(words) - 1) and len(" ".join(out)) > 300
-                if heading:
+        text = "\n".join(pages_text[s0:s0 + 3])
+        m = BUS_RE.search(text)
+        paras = _paras(text[m.end():] if m else text)
+        picked: list[str] = []
+        for p_ in paras:
+            if p_.startswith("§"):
+                if picked and len(" ".join(picked)) > 350:
                     break
-                para.append(l)
-                if len(" ".join(out + para)) > max_chars * 1.3:
-                    break
-            if para:
-                out.append(" ".join(para))
-            txt = " ".join(out)
-            txt = re.sub(r"\s*[(\[](?:Source|Sources?)\s*:[^)\]]*[)\]]\.?", "", txt)
-            txt = re.sub(r"(\w)- (\w)", r"\1\2", txt)
-            txt = re.sub(r"\s+", " ", txt).strip()
-            if len(txt) < 120:
                 continue
-            if len(txt) > max_chars:
-                cut = txt[:max_chars]
-                txt = cut[:cut.rfind(". ") + 1] if ". " in cut else cut + "…"
-            return txt, i + 1
+            if len(p_) < 80 or BOILER.search(p_[:400]):
+                if picked and len(" ".join(picked)) > 350:
+                    break
+                continue
+            picked.append(p_)
+            if len(" ".join(picked)) > max_chars:
+                break
+        txt = " ".join(picked)
+        txt = re.sub(r"\s*[(\[](?:Source|Sources?)\s*:[^)\]]*[)\]]\.?", "", txt)
+        txt = re.sub(r"(\w)- (\w)", r"\1\2", txt)
+        txt = re.sub(r"\s+", " ", txt).strip()
+        if len(txt) < 120:
+            continue
+        if len(txt) > max_chars:
+            cut = txt[:max_chars]
+            txt = cut[:cut.rfind(". ") + 1] if ". " in cut else cut + "…"
+        page = next((k + 1 for k in range(s0, min(s0 + 3, len(pages_text))) if picked and picked[0][:40] in " ".join(pages_text[k].split())), s0 + 1)
+        return txt, page
     return None, None

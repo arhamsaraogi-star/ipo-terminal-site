@@ -100,7 +100,8 @@ def parse_offer(flat: str) -> dict:
 
 ENTITY_END = re.compile(r"(Private Limited|Pvt\.? Ltd\.?|Limited|LLP|Ltd\.?)\s*$", re.I)
 HEADER_WORDS = {"NAME", "LOGO", "CONTACT", "PERSON", "PERSONS", "TELEPHONE", "E-MAIL", "EMAIL", "AND", "OF", "TO", "THE", "BOOK",
-                "RUNNING", "LEAD", "MANAGER", "MANAGERS", "REGISTRAR", "OFFER", "ISSUE", "/", "&", "TEL", "E-MAIL:", "ID"}
+                "RUNNING", "LEAD", "MANAGER", "MANAGERS", "REGISTRAR", "OFFER", "ISSUE", "/", "&", "TEL", "E-MAIL:", "ID", "NO", "NO.",
+                "BRLM", "(BRLM)", "MAIL", "PHONE", "DETAILS", "SR.", "INVESTOR", "GRIEVANCE"}
 
 
 def _is_header(l: str) -> bool:
@@ -145,6 +146,28 @@ def _parties_by_email(lines: list[str]) -> list[dict]:
     return parties
 
 
+def _parties_name_after(lines: list[str]) -> list[dict]:
+    """Layout where contact person, e-mail and phone come first and the entity name follows (common in SME covers)."""
+    out: list[dict] = []
+    cur: dict = {}
+    for l in lines:
+        em = EMAIL.search(l)
+        if em:
+            cur["email"] = em.group(0)
+            continue
+        if re.match(r"^(Tel|Telephone|Phone|Mob)", l, re.I) or re.fullmatch(r"[+\d][\d\s()/+-]{6,}", l):
+            cur["phone"] = re.sub(r"^(Tel|Telephone|Phone|Mob)[^:]*:\s*", "", l, flags=re.I)
+            continue
+        m = NAME_SPLIT.match(l)
+        if m and len(m.group(1)) > 5 and not re.search(r"@", l):
+            cur["name"] = _flat(m.group(1) + (m.group(2) or "")).title() if l.isupper() else _flat(m.group(1) + (m.group(2) or ""))
+            out.append(cur)
+            cur = {}
+        elif not re.search(r"\d", l) and len(l) < 70 and "email" not in cur:
+            cur["contact_person"] = f"{cur['contact_person']} {l}" if cur.get("contact_person") else l
+    return [p for p in out if p.get("name")]
+
+
 def parse_parties(text: str, start_pat: str, end_pat: str) -> list[dict]:
     m = re.search(start_pat + r"(.*?)" + end_pat, text, re.S)
     if not m:
@@ -152,6 +175,8 @@ def parse_parties(text: str, start_pat: str, end_pat: str) -> list[dict]:
     lines = [l.strip() for l in m.group(1).splitlines() if l.strip()]
     lines = [l for l in lines if not _is_header(l)]
     by_email = _parties_by_email(lines)
+    if not by_email:
+        by_email = _parties_name_after(lines)
     if by_email:
         return by_email[:12]
     parties: list[dict] = []
@@ -213,11 +238,11 @@ def extract(pages: list[str]) -> dict:
         if re.search(r"\bBSE Limited\b|\bBSE\b", flat):
             ex.append("BSE")
     out["exchanges"] = ex
-    brlm = parse_parties(text, r"(?:BOOK RUNNING LEAD MANAGERS?|LEAD MANAGERS? TO THE (?:OFFER|ISSUE)|GLOBAL CO-ORDINATORS AND BOOK RUNNING LEAD MANAGERS?)\s*\n",
+    brlm = parse_parties(text, r"(?:BOOK RUNNING LEAD MANAGERS?|LEAD MANAGERS? TO THE (?:OFFER|ISSUE)|GLOBAL CO-ORDINATORS AND BOOK RUNNING LEAD MANAGERS?)[^\n]{0,40}\n",
                          r"\n\s*REGISTRAR TO THE")
     if brlm:
         out["brlms"] = brlm
-    reg = parse_parties(text, r"REGISTRAR TO THE (?:OFFER|ISSUE)\s*\n", r"\n\s*(?:BID/|ISSUE PROGRAMME|OFFER PROGRAMME|BID / |ISSUE OPENS|ANCHOR)")
+    reg = parse_parties(text, r"REGISTRAR TO THE (?:OFFER|ISSUE)[^\n]{0,30}\n", r"\n\s*(?:BID/|ISSUE PROGRAMME|OFFER PROGRAMME|BID / |ISSUE OPENS|ANCHOR)")
     if reg:
         out["registrar"] = reg[0]
     # pages for provenance

@@ -59,7 +59,7 @@ export function PrivateTracker() {
           { key: 'c', label: 'Company', sort: r => r.company.name, render: r => <div><b>{held.has(r.company.company_id) && <span style={{ color: '#f5a623' }}>★ </span>}{r.company.name}</b>
             <div className="muted text-xs">{r.company.segment === 'SME' ? 'SME' : 'Mainboard'}{r.company.drhp_status ? ` · ${r.company.drhp_status}` : ''}</div></div> },
           { key: 's', label: 'Stage', render: r => <Pill tone={r.company.lifecycle === 'RHP_FILED' || r.company.lifecycle === 'ISSUE_ANNOUNCED' ? 'blue' : r.company.lifecycle === 'SEBI_OBSERVED' ? 'indigo' : 'violet'}>{humanize(r.company.lifecycle)}</Pill> },
-          { key: 'f', label: 'Filed', right: true, sort: r => filedOn(r), render: r => fmtDate(filedOn(r)) },
+          { key: 'f', label: 'Filed', m: 'key', right: true, sort: r => filedOn(r), render: r => fmtDate(filedOn(r)) },
           { key: 'z', label: 'Size (as filed)', right: true, sort: r => fv(issueSizeFact(r)), render: r => dealSize(r).text },
           { key: 'b', label: 'Lead managers', hideMobile: true, render: r => <span className="text-sm">{(ipo(r)?.intermediaries?.brlms ?? []).map(b => b.replace(/ (Private )?Limited$/i, '')).join(', ') || '—'}</span> },
           { key: 'p', label: 'Our position', right: true, render: r => { const h = held.get(r.company.company_id); if (!h) return <span className="muted">—</span>

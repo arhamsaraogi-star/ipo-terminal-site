@@ -82,7 +82,8 @@ def issue_page(client, url: str) -> dict:
                 kv.setdefault(k, cells[1])
                 if ls:
                     links.setdefault(k, ls[0])
-    pdfs = [l for l in re.findall(r'href="([^"]+\.pdf)"', page, re.I)]
+    from pipeline.ingestion.bsesme import mirror
+    pdfs = [mirror(l) for l in re.findall(r'href="([^"]+\.(?:pdf|zip))"', page, re.I)]
     lo, hi = None, None
     band = kv.get("ipo price band") or kv.get("price band") or ""
     nums = re.findall(r"₹\s?([\d,]+(?:\.\d+)?)", band)

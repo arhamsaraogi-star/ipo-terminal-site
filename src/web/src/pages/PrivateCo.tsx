@@ -186,7 +186,7 @@ export function PrivateView({ r }: { r: CompanyRecord }) {
             </BarChart>
           </ResponsiveContainer></div>
         ) : <p className="muted">No rounds yet — press “Edit / add round”.</p>}
-        <div className="tbl-wrap mt-3"><table className="tbl">
+        <div className="tbl-wrap wide mt-3"><table className="tbl tbl-wide">
           <thead><tr><th>Date</th><th>Round</th><th className="r">Post-money</th><th className="r">Price / share</th><th>Lead</th>{h && <th className="r">vs our entry</th>}</tr></thead>
           <tbody>{[...p.rounds].reverse().map((x, i) => { const m = marks?.marks.find(mm => mm.date === x.date && mm.label === x.label); return (
             <tr key={i}><td data-label="Date" className="td-primary">{fmtDate(x.date)}</td><td data-label="Round">{x.label}</td><td data-label="Post-money" className="r">{fmtCur(x.post_money, p.currency)}</td>

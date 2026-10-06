@@ -74,12 +74,16 @@ export function FactValue({ f, children }: { f?: Fact | null; children?: ReactNo
   )
 }
 
-export interface Col<T> { key: string; label: ReactNode; render: (r: T) => ReactNode; sort?: (r: T) => number | string | null; right?: boolean; hideMobile?: boolean; primary?: boolean }
+export interface Col<T> { key: string; label: ReactNode; render: (r: T) => ReactNode; sort?: (r: T) => number | string | null; right?: boolean; hideMobile?: boolean; primary?: boolean
+  /** phone layout: 'key' = the big number on the right, 'meta' = small line under the title, 'hide' = not shown */
+  m?: 'key' | 'meta' | 'hide' }
 
 /** Sortable table. On phones it reflows into cards (labels come from the column headers). */
-export function Table<T>({ rows, cols, onRow, empty = 'Nothing here yet', initialSort, search, pageSize = 60 }: {
+export function Table<T>({ rows, cols, onRow, empty = 'Nothing here yet', initialSort, search, pageSize = 60, wide = false }: {
   rows: T[]; cols: Col<T>[]; onRow?: (r: T) => void; empty?: string; initialSort?: { key: string; dir: 1 | -1 }
   search?: (r: T) => string; pageSize?: number
+  /** wide numeric tables (financials): keep the grid on phones and scroll sideways with a sticky first column */
+  wide?: boolean
 }) {
   const [sort, setSort] = useState(initialSort)
   const [q, setQ] = useState('')
@@ -100,14 +104,27 @@ export function Table<T>({ rows, cols, onRow, empty = 'Nothing here yet', initia
     })
   }, [filtered, cols, sort])
   const textOf = (n: ReactNode) => (typeof n === 'string' ? n : '')
+  // phone layout roles: title (first/primary), one key figure on the right, up to 3 small meta values below
+  const roles = useMemo(() => {
+    const prim = Math.max(0, cols.findIndex(c => c.primary))
+    const r: Record<string, 'title' | 'key' | 'meta' | 'hide'> = {}
+    cols.forEach((c, i) => { r[c.key] = i === prim ? 'title' : c.m ?? (c.hideMobile ? 'hide' : 'meta') })
+    if (!Object.values(r).includes('key')) {
+      const k = cols.find(c => r[c.key] === 'meta' && c.right && c.key === initialSort?.key) ?? cols.find(c => r[c.key] === 'meta' && c.right)
+      if (k) r[k.key] = 'key'
+    }
+    let n = 0
+    cols.forEach(c => { if (r[c.key] === 'meta' && ++n > 3) r[c.key] = 'hide' })
+    return r
+  }, [cols, initialSort?.key])
   return (
     <div>
       {search && (
         <input className="input mb-3 !h-10" placeholder={`Filter ${rows.length} rows…`} value={q} onChange={e => { setQ(e.target.value); setLimit(pageSize) }} />
       )}
       {!sorted.length ? <div className="muted py-6 text-center">{q ? 'No matches' : empty}</div> : (
-        <div className="tbl-wrap">
-          <table className="tbl">
+        <div className={`tbl-wrap ${wide ? 'wide' : ''}`}>
+          <table className={`tbl ${wide ? 'tbl-wide' : 'tbl-list'}`}>
             <thead><tr>{cols.map(c => (
               <th key={c.key} className={c.right ? 'r' : ''} data-sort={c.sort ? '' : undefined}
                 onClick={() => c.sort && setSort(s => ({ key: c.key, dir: s?.key === c.key ? (s.dir === 1 ? -1 : 1) : (c.right ? -1 : 1) }))}>
@@ -115,7 +132,8 @@ export function Table<T>({ rows, cols, onRow, empty = 'Nothing here yet', initia
               </th>))}</tr></thead>
             <tbody>{sorted.slice(0, limit).map((r, i) => (
               <tr key={i} className={onRow ? 'row-link' : ''} onClick={() => onRow?.(r)}>
-                {cols.map((c, ci) => <td key={c.key} data-label={textOf(c.label)} className={`${c.right ? 'r' : ''} ${c.hideMobile ? 'hide-m' : ''} ${c.primary || ci === 0 ? 'td-primary' : ''}`}>{c.render(r)}</td>)}
+                {cols.map(c => <td key={c.key} data-label={textOf(c.label)} className={`${c.right ? 'r' : ''} ${wide ? (c.hideMobile ? 'hide-m' : '') : `m-${roles[c.key]}`} ${roles[c.key] === 'title' ? 'td-primary' : ''}`}>{c.render(r)}</td>)}
+                {!wide && <td className="m-br" aria-hidden />}
               </tr>))}</tbody>
           </table>
           {sorted.length > limit && <button className="btn mt-3" onClick={() => setLimit(l => l + pageSize * 2)}>Show more ({sorted.length - limit} left)</button>}

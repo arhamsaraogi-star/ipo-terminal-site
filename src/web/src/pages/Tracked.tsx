@@ -50,8 +50,8 @@ export default function Tracked() {
       <div className="grid xl:grid-cols-2 gap-5">
         <Card title="Next 90 days" action={<a className="btn" href="#/calendar">Calendar →</a>} solid>
           <Table rows={events} empty="No dated milestones in the next 90 days" onRow={x => go(`/company/${x.r.company.company_id}`)} pageSize={12} cols={[
-            { key: 'd', label: 'Date', render: x => <b>{fmtDate(x.e.date, false)}</b> },
-            { key: 'c', label: 'Company', render: x => x.r.company.name },
+            { key: 'd', label: 'Date', m: 'key', render: x => <b>{fmtDate(x.e.date, false)}</b> },
+            { key: 'c', label: 'Company', primary: true, render: x => x.r.company.name },
             { key: 'e', label: 'Milestone', render: x => v.event_types[x.e.event_type]?.label ?? x.e.event_type },
             { key: 'in', label: 'In', right: true, render: x => { const d = daysUntil(x.e.date); return d === 0 ? <Pill tone="green">Today</Pill> : `${d}d` } },
           ]} />
