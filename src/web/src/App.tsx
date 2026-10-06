@@ -16,6 +16,7 @@ import { Listed, PrivateTracker } from './pages/Lists'
 import Portfolio from './pages/Portfolio'
 import Tracked from './pages/Tracked'
 import AnchorDesk from './pages/AnchorDesk'
+import ExecutivePrint from './pages/ExecutivePrint'
 import { NewPrivatePage } from './pages/PrivateCo'
 import { privateRecord, loadPf, savePf, takeLegacy, withTombstones, normalisePf, type Pf } from './lib/portfolio'
 
@@ -336,6 +337,7 @@ function Shell({ onLock, updated }: { onLock: () => void; updated: string | null
     switch ('/' + (seg ?? '')) {
       case '/': return <Dashboard />
       case '/anchor': return <AnchorDesk />
+      case '/executive': return <ExecutivePrint />
       case '/portfolio': return <Portfolio />
       case '/ipos': return <Tabbed base="/ipos" tab={arg} tabs={[
         { k: 'upcoming', label: 'Upcoming & open', el: <Pipeline mode="upcoming" /> },

@@ -246,7 +246,7 @@ function OfferAsFiled({ r }: { r: CompanyRecord }) {
 }
 
 // ───────── financials ─────────
-const FIN_ORDER: [string, string][] = [
+export const FIN_ORDER: [string, string][] = [
   ['revenue_from_operations', 'Revenue from operations'], ['total_income', 'Total income'], ['ebitda', 'EBITDA'], ['ebitda_margin', 'EBITDA margin'],
   ['pbt', 'Profit before tax'], ['pat', 'Profit after tax'], ['pat_margin', 'PAT margin'], ['revenue_growth', 'Revenue growth'], ['pat_growth', 'PAT growth'],
   ['eps_basic', 'EPS (basic, ₹)'], ['eps_diluted', 'EPS (diluted, ₹)'], ['net_worth', 'Net worth'], ['equity_share_capital', 'Equity share capital'],

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.0 — The Executive Print
+- New black-and-white, large-type morning report (button on Home): greeting and date, headline numbers, top story, new DRHP filings, SEBI approvals, listings, significant updates, week-ahead calendar and lock-ins, recent-listing scorecard, your positions, headlines
+- A full dossier for every new DRHP: business overview, offer details and lead managers, complete financial table, revenue/profit chart, industry charts and listed peers
+- Prints one section per page (A4); window switchable between 24 hours, 2 days and 7 days
+
 ## 0.7.1 — fixes: lock-in dates, SEBI approvals, coverage, sync
 - Anchor lock-ins are dated from the issue timeline alone (no longer wait for the share count to be read from the offer document); counted the market way, allotment day = day 1 (allotment 4 Aug → 30d ends 2 Sep, 90d ends 1 Nov)
 - SEBI approval: an "Approved" status on the NSE register creates a SEBI-approval event (date first seen), moves the company to "SEBI observed", and shows in a new "SEBI nod" column on the Pipeline

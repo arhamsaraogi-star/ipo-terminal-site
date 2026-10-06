@@ -25,7 +25,7 @@ export default function Dashboard() {
           <div className="eyebrow">{fmtDate(new Date().toISOString())}</div>
           <h1 className="display text-[34px] font-bold leading-tight">Good {greeting()}</h1>
         </div>
-        <div className="flex gap-2 flex-wrap"><a className="btn" href="#/new-private/">+ Private company</a><a className="btn btn-primary" href="#/portfolio">Portfolio →</a></div>
+        <div className="flex gap-2 flex-wrap"><a className="btn btn-primary" href="#/executive">🖨 The Executive Print</a><a className="btn" href="#/new-private/">+ Private company</a><a className="btn btn-primary" href="#/portfolio">Portfolio →</a></div>
       </div>
 
       <SinceLastVisit />

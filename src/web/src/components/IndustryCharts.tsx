@@ -12,7 +12,7 @@ const yearOf = (p: string) => {
 }
 
 /** Re-order a series chronologically (some tables print newest first). */
-function chrono(s: IndustrySeries) {
+export function chrono(s: IndustrySeries) {
   const idx = s.periods.map((_, i) => i).sort((a, b) => (yearOf(s.periods[a]) ?? 0) - (yearOf(s.periods[b]) ?? 0) || Number(s.projected?.[a]) - Number(s.projected?.[b]))
   return {
     periods: idx.map(i => s.periods[i]), projected: idx.map(i => !!s.projected?.[i]),
